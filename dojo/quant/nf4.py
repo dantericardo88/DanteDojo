@@ -1,0 +1,61 @@
+"""NF4 quantization config for DanteDojo — bitsandbytes training-only path.
+
+Returns BitsAndBytesConfig kwargs for QLoRA NF4 training.
+Raises QuantizationError if bitsandbytes is not installed.
+"""
+
+from __future__ import annotations
+
+from dojo.core.exceptions import QuantizationError
+
+_INSTALL_INSTRUCTIONS = (
+    "bitsandbytes is not installed. "
+    "Install it with:\n"
+    "  pip install bitsandbytes\n"
+    "See https://github.com/TimDettmers/bitsandbytes for details.\n"
+    "Note: NF4 quantization is for training only (QLoRA), not inference export."
+)
+
+
+def get_bnb_nf4_config() -> dict:
+    """Return BitsAndBytesConfig kwargs dict for NF4 QLoRA training.
+
+    Returns a dict ready to unpack into BitsAndBytesConfig(**kwargs).
+    This is intentionally a plain dict so callers can inspect/override
+    individual fields before instantiating the config object.
+
+    Returns:
+        dict with load_in_4bit, bnb_4bit_quant_type, bnb_4bit_use_double_quant,
+        and bnb_4bit_compute_dtype keys.
+
+    Raises:
+        QuantizationError: if bitsandbytes is not installed.
+    """
+    _require_bitsandbytes()
+
+    import torch  # noqa: F401 — bitsandbytes requires torch
+
+    return {
+        "load_in_4bit": True,
+        "bnb_4bit_quant_type": "nf4",
+        "bnb_4bit_use_double_quant": True,
+        "bnb_4bit_compute_dtype": "bfloat16",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _require_bitsandbytes() -> None:
+    """Raise QuantizationError with install instructions if bitsandbytes is absent."""
+    try:
+        import bitsandbytes  # noqa: F401
+    except ImportError as exc:
+        raise QuantizationError(
+            _INSTALL_INSTRUCTIONS,
+            reason=_INSTALL_INSTRUCTIONS,
+        ) from exc
+
+
+__all__ = ["get_bnb_nf4_config"]

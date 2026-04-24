@@ -1,0 +1,218 @@
+"""Top-level inference router for DanteDojo.
+
+Routes inference requests according to a RoutingPolicy, enforces
+privacy tiers, and records cost receipts.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime, timezone
+from typing import Optional
+
+from dojo.core.evidence import EvidenceLogger, EvidenceType
+from dojo.core.exceptions import NoRouteAvailable, PrivacyTierViolation
+from dojo.core.one_door import one_door
+from dojo.core.types import (
+    CostReceipt,
+    PrivacyTier,
+    RoutingOption,
+    RoutingPolicy,
+)
+
+# Route options that require external API access
+_EXTERNAL_API_OPTIONS: frozenset[RoutingOption] = frozenset({
+    RoutingOption.API_HAIKU,
+    RoutingOption.API_SONNET,
+    RoutingOption.API_DEEPSEEK,
+    RoutingOption.API_GPT5_MINI,
+})
+
+# Route options satisfied by a local server
+_LOCAL_OPTIONS: frozenset[RoutingOption] = frozenset({
+    RoutingOption.LOCAL_SPECIALIST,
+    RoutingOption.LOCAL_GENERALIST,
+})
+
+# Stub cost estimates per external API route (USD per 1k tokens)
+_API_COST_PER_1K: dict[RoutingOption, float] = {
+    RoutingOption.API_HAIKU: 0.00025,
+    RoutingOption.API_SONNET: 0.003,
+    RoutingOption.API_DEEPSEEK: 0.00014,
+    RoutingOption.API_GPT5_MINI: 0.00015,
+}
+
+
+@one_door("route.dispatch")
+def dispatch(
+    task: str,
+    input_text: str,
+    policy: RoutingPolicy,
+    *,
+    available_specialists: Optional[list[str]] = None,
+    cost_tracker: Optional[object] = None,
+) -> dict:
+    """Route an inference request according to the RoutingPolicy.
+
+    Privacy enforcement:
+      - CONFIDENTIAL or SECRETS + external API route → PrivacyTierViolation
+
+    Args:
+        task: Dante task identifier (e.g. "bookkeeping").
+        input_text: The prompt / input text for routing decisions.
+        policy: RoutingPolicy describing preferences and constraints.
+        available_specialists: List of specialist model names currently
+            deployed. Determines whether LOCAL_SPECIALIST is viable.
+        cost_tracker: Optional CostTracker to persist cost receipts.
+
+    Returns:
+        dict with keys:
+          - route: chosen RoutingOption value string
+          - endpoint_url: str or None (None for local when server not started)
+          - reason: human-readable rationale
+          - cost_receipt: CostReceipt for the dispatch
+
+    Raises:
+        PrivacyTierViolation: when CONFIDENTIAL/SECRETS data would reach an API.
+        NoRouteAvailable: when no viable route exists.
+    """
+    logger = EvidenceLogger.get_instance()
+    specialists = set(available_specialists or [])
+
+    chosen: Optional[RoutingOption] = None
+    reason: str = ""
+
+    for option in policy.preference_order:
+        viable, why = _is_viable(option, policy, specialists)
+        if not viable:
+            # Check if this is a privacy violation — raise immediately
+            if _is_privacy_violation(option, policy):
+                logger.emit(
+                    {
+                        "type": EvidenceType.ROUTE_PRIVACY_BLOCKED.value,
+                        "data": {
+                            "task": task,
+                            "blocked_option": option.value,
+                            "privacy_tier": policy.privacy_tier.value,
+                            "reason": why,
+                        },
+                    },
+                    organ="route",
+                )
+                raise PrivacyTierViolation(
+                    f"Privacy tier {policy.privacy_tier.value!r} forbids "
+                    f"routing to external API ({option.value})",
+                    reason=why,
+                )
+            continue
+
+        chosen = option
+        reason = why
+        break
+
+    if chosen is None:
+        raise NoRouteAvailable(
+            f"No viable route for task={task!r} with policy preferences "
+            f"{[o.value for o in policy.preference_order]}",
+            reason="all options exhausted or unavailable",
+        )
+
+    endpoint_url: Optional[str] = None
+    if chosen in _EXTERNAL_API_OPTIONS:
+        endpoint_url = _api_endpoint(chosen)
+
+    receipt = _build_receipt(task, chosen, input_text)
+
+    logger.emit(
+        {
+            "type": EvidenceType.ROUTE_DECISION.value,
+            "data": {
+                "task": task,
+                "route": chosen.value,
+                "endpoint_url": endpoint_url,
+                "reason": reason,
+                "privacy_tier": policy.privacy_tier.value,
+            },
+        },
+        organ="route",
+    )
+
+    if cost_tracker is not None:
+        cost_tracker.record(receipt)
+
+    return {
+        "route": chosen.value,
+        "endpoint_url": endpoint_url,
+        "reason": reason,
+        "cost_receipt": receipt,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Internal helpers
+# ---------------------------------------------------------------------------
+
+def _is_viable(
+    option: RoutingOption,
+    policy: RoutingPolicy,
+    specialists: set[str],
+) -> tuple[bool, str]:
+    """Check if a routing option is viable; return (viable, reason)."""
+    if option == RoutingOption.LOCAL_SPECIALIST:
+        if specialists:
+            return True, f"local specialist available: {next(iter(specialists))}"
+        return False, "no local specialist deployed"
+
+    if option == RoutingOption.LOCAL_GENERALIST:
+        return True, "local generalist always available"
+
+    if option in _EXTERNAL_API_OPTIONS:
+        if not policy.allows_external_api():
+            return False, (
+                f"privacy tier {policy.privacy_tier.value!r} forbids external API"
+            )
+        return True, f"external API {option.value} available"
+
+    return False, f"unknown routing option: {option.value}"
+
+
+def _is_privacy_violation(option: RoutingOption, policy: RoutingPolicy) -> bool:
+    """True when the option requires an external API and policy forbids it."""
+    return (
+        option in _EXTERNAL_API_OPTIONS
+        and policy.privacy_tier in (PrivacyTier.CONFIDENTIAL, PrivacyTier.SECRETS)
+    )
+
+
+def _api_endpoint(option: RoutingOption) -> str:
+    """Return the API endpoint URL for an external API option."""
+    _endpoints: dict[RoutingOption, str] = {
+        RoutingOption.API_HAIKU: "https://api.anthropic.com/v1/messages",
+        RoutingOption.API_SONNET: "https://api.anthropic.com/v1/messages",
+        RoutingOption.API_DEEPSEEK: "https://api.deepseek.com/v1/chat/completions",
+        RoutingOption.API_GPT5_MINI: "https://api.openai.com/v1/chat/completions",
+    }
+    return _endpoints.get(option, "")
+
+
+def _build_receipt(task: str, option: RoutingOption, input_text: str) -> CostReceipt:
+    """Build a stub CostReceipt for the dispatched route."""
+    token_estimate = max(1, len(input_text.split()))
+    cost_per_1k = _API_COST_PER_1K.get(option, 0.0)
+    cost_usd = (token_estimate / 1000.0) * cost_per_1k
+
+    return CostReceipt(
+        task=task,
+        route_taken=option.value,
+        tokens_in=token_estimate,
+        tokens_out=0,
+        cost_usd=round(cost_usd, 8),
+        latency_ms=0.0,
+        local_displaced_estimate_usd=round(
+            (token_estimate / 1000.0) * _API_COST_PER_1K.get(RoutingOption.API_HAIKU, 0.0),
+            8,
+        ),
+        recorded_at=datetime.now(timezone.utc),
+    )
+
+
+__all__ = ["dispatch"]

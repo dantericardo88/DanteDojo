@@ -1,0 +1,80 @@
+# Python bytecode
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Distribution / packaging
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment files (never commit secrets)
+.env
+.env.*
+
+# Linter / type-checker caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Evidence chain files (generated at runtime — never commit)
+evidence_chain/
+*.jsonl
+
+# User-local Dante config and keys (never commit)
+~/.dante/
+.dante/
+
+# Donor codebases (large external source trees checked out locally)
+donors/
+STEAKV3/
+
+# MLflow experiment tracking
+mlruns/
+
+# Weights & Biases
+wandb/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor artifacts
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Coverage reports
+.coverage
+htmlcov/
+coverage.xml
+
+# Build artifacts from C extensions
+*.so
+*.pyd
+
+# Triton kernel cache
+.triton/
+
+# HuggingFace cache (local, not committed)
+.cache/huggingface/
