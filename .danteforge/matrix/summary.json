@@ -52,7 +52,7 @@
     }
   },
   "category_totals": {
-    "dante_dojo":    { "cat_a": 68, "cat_b": 36, "cat_c": 46, "cat_d": 25, "cat_e": 40, "cat_f": 42, "cat_g": 40, "cat_h": 30, "cat_i": 42, "raw_total": 369 },
+    "dante_dojo":    { "cat_a": 68, "cat_b": 40, "cat_c": 48, "cat_d": 26, "cat_e": 40, "cat_f": 42, "cat_g": 40, "cat_h": 30, "cat_i": 42, "raw_total": 376 },
     "axolotl":       { "cat_a":  3, "cat_b": 34, "cat_c": 27, "cat_d": 19, "cat_e": 15, "cat_f":  0, "cat_g":  7, "cat_h": 24, "cat_i": 24, "raw_total": 153 },
     "unsloth":       { "cat_a":  2, "cat_b": 32, "cat_c": 21, "cat_d": 21, "cat_e": 14, "cat_f":  0, "cat_g":  5, "cat_h": 20, "cat_i": 23, "raw_total": 138 },
     "llamafactory":  { "cat_a":  3, "cat_b": 33, "cat_c": 28, "cat_d": 21, "cat_e": 18, "cat_f":  0, "cat_g":  8, "cat_h": 24, "cat_i": 25, "raw_total": 160 },
@@ -64,7 +64,7 @@
     "modal":         { "cat_a":  2, "cat_b": 22, "cat_c":  8, "cat_d":  9, "cat_e": 14, "cat_f": 12, "cat_g":  2, "cat_h": 13, "cat_i": 16, "raw_total":  98 }
   },
   "rankings": [
-    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 369, "pct": 73.8, "moat": "Constitutional sovereignty moat intact (cat_a=68/80, 85%). GRPO+DPO RL trainers (d18/d19=9), FSDP2 (d14=9), lm-eval harness (d37=9), Merkle eval receipt (d40=9), contamination detection (d38=9). Wave 1+2+3: +58 pts (311→369). SFT/QLoRA real mocked pipeline (d16/d17=7), routing circuit breaker + JSONL cost persistence (d32=8/d35=8/d36=8), Axolotl bridge + recipe export (d46/d47/d48 upgraded). Lead over #2 now 184 pts." },
+    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 376, "pct": 75.2, "moat": "Constitutional sovereignty moat intact (cat_a=68/80, 85%). GRPO+DPO RL trainers (d18/d19=9), FSDP2 (d14=9), lm-eval harness (d37=9), Merkle eval receipt (d40=9), contamination detection (d38=9). Wave 1-4: +65 pts (311→376). SM detection NVML-mocked (d09=8), quant quality gate (d13=7), idle FSM (d20=8), contamination hardened (d21=8). Lead over #2 now 191 pts." },
     { "rank": 2,  "competitor": "vertex_ai",    "raw_total": 185, "pct": 37.0, "moat": "Managed scale + Experiments tracking. cat_h=29 best-in-class." },
     { "rank": 3,  "competitor": "llamafactory", "raw_total": 160, "pct": 32.0, "moat": "Broadest algorithm coverage (SFT+DPO+PPO+ORPO). Best all-in-one OSS." },
     { "rank": 4,  "competitor": "together_ai",  "raw_total": 158, "pct": 31.6, "moat": "Cloud-scale SFT + OpenAI-compatible API. Llama/Mistral focus." },
