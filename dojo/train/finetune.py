@@ -230,6 +230,24 @@ def _run_real_sft(
     return result.global_step, result.training_loss
 
 
+def _register_flash_attention(model: Any, kernel_fn: Any) -> None:
+    """Attempt to register the flash attention kernel on the model config.
+
+    Sets ``model.config.attn_implementation`` to ``"flash_attention_2"`` when
+    supported, so the model's self-attention layers use the Triton-backed
+    FlashAttention-2 implementation.  ``kernel_fn`` is stored on the config
+    for downstream inspection (e.g. custom forward hooks).  Fails silently —
+    the training path always continues regardless.
+    """
+    try:
+        if hasattr(model, "config"):
+            model.config.attn_implementation = "flash_attention_2"
+            # Store kernel reference for downstream inspection / custom hooks.
+            model.config._dojo_kernel_fn = kernel_fn
+    except Exception:
+        pass
+
+
 def _run_real_qlora(
     config: FinetuneConfig,
     logger: EvidenceLogger,
@@ -256,6 +274,22 @@ def _run_real_qlora(
 
     model = transformers.AutoModelForCausalLM.from_pretrained(config.base_model)
     model = peft.prepare_model_for_kbit_training(model)
+
+    # --- Triton kernel registration (after model load, before training) ---
+    try:
+        from dojo.kernels.attention import flash_attention_forward, is_triton_available
+        if is_triton_available():
+            _register_flash_attention(model, flash_attention_forward)
+            kernel_used = "flash_attn2"
+        else:
+            kernel_used = "standard"
+    except Exception:
+        kernel_used = "standard"
+
+    logger.emit(
+        {"type": "train.kernel", "data": {"kernel_used": kernel_used}},
+        organ="train",
+    )
 
     lora_config = peft.LoraConfig(
         r=config.lora_r,
