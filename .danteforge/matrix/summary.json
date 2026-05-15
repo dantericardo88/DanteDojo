@@ -52,7 +52,7 @@
     }
   },
   "category_totals": {
-    "dante_dojo":    { "cat_a": 71, "cat_b": 43, "cat_c": 48, "cat_d": 26, "cat_e": 40, "cat_f": 42, "cat_g": 43, "cat_h": 30, "cat_i": 42, "raw_total": 385 },
+    "dante_dojo":    { "cat_a": 71, "cat_b": 46, "cat_c": 49, "cat_d": 26, "cat_e": 40, "cat_f": 45, "cat_g": 43, "cat_h": 36, "cat_i": 43, "raw_total": 399 },
     "axolotl":       { "cat_a":  3, "cat_b": 34, "cat_c": 27, "cat_d": 19, "cat_e": 15, "cat_f":  0, "cat_g":  7, "cat_h": 24, "cat_i": 24, "raw_total": 153 },
     "unsloth":       { "cat_a":  2, "cat_b": 32, "cat_c": 21, "cat_d": 21, "cat_e": 14, "cat_f":  0, "cat_g":  5, "cat_h": 20, "cat_i": 23, "raw_total": 138 },
     "llamafactory":  { "cat_a":  3, "cat_b": 33, "cat_c": 28, "cat_d": 21, "cat_e": 18, "cat_f":  0, "cat_g":  8, "cat_h": 24, "cat_i": 25, "raw_total": 160 },
@@ -64,7 +64,7 @@
     "modal":         { "cat_a":  2, "cat_b": 22, "cat_c":  8, "cat_d":  9, "cat_e": 14, "cat_f": 12, "cat_g":  2, "cat_h": 13, "cat_i": 16, "raw_total":  98 }
   },
   "rankings": [
-    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 385, "pct": 77.0, "moat": "Constitutional sovereignty moat intact (cat_a=71/80, 88.8%). GRPO+DPO RL trainers (d18/d19=9), FSDP2 (d14=9), lm-eval harness (d37=9), Merkle eval receipt (d40=9), contamination detection (d38=9). Wave 1-5: +74 pts (311→385). Triton kernel wired into QLoRA (d15=8), revocation gate comprehensive (d08=8), judge agreement gate (d39=9), eval judge pipeline (d41=7). Lead over #2 now 200 pts." },
+    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 399, "pct": 79.8, "moat": "Constitutional sovereignty moat intact (cat_a=71/80, 88.8%). Cat_f routing at 90% (d32/d33/d34/d35/d36 all 9), cat_h experiment tracking at 90% (d42-d45 all 9). Wave 1-6: +88 pts (311→399). Lead over #2 now 214 pts. Remaining frontier: d22/d23 GPTQ/AWQ stubs, d16/d17 real GPU training, d26-d28 streaming loop." },
     { "rank": 2,  "competitor": "vertex_ai",    "raw_total": 185, "pct": 37.0, "moat": "Managed scale + Experiments tracking. cat_h=29 best-in-class." },
     { "rank": 3,  "competitor": "llamafactory", "raw_total": 160, "pct": 32.0, "moat": "Broadest algorithm coverage (SFT+DPO+PPO+ORPO). Best all-in-one OSS." },
     { "rank": 4,  "competitor": "together_ai",  "raw_total": 158, "pct": 31.6, "moat": "Cloud-scale SFT + OpenAI-compatible API. Llama/Mistral focus." },
@@ -76,7 +76,7 @@
     { "rank": 10, "competitor": "litellm",      "raw_total":  83, "pct": 16.6, "moat": "Best-in-class routing (d32=10) and cost tracking (d35=9). Routing-only." }
   ],
   "dante_dojo_analysis": {
-    "note": "Post-Wave-1+2+3+4+5 2026-05-15. raw_total 311→385 (+74 pts). Constitutional moat intact. Wave 5: Triton kernel wired into QLoRA (d15: 5→8), revocation gate comprehensive (d08: 5→8), judge agreement gate (d39: 8→9), eval judge pipeline (d41: 5→7). Natural ceilings (no H100/Blackwell): d10/d11=6/5 (FP8), d12=5 (FP4), d50=2 (community/PyPI). Next targets Wave 6: push 8→9 for d09/d13/d21/d32/d35/d36/d42/d43/d44/d45/d49.",
+    "note": "Post-Wave-1-6 2026-05-15. raw_total 311→399 (+88 pts). Wave 6: d09/d13/d21/d32/d35/d36/d42/d43/d44/d45/d49 all pushed to 9. cat_f=45/50 (90%), cat_h=36/40 (90%). Natural ceilings: d10/d11=6/5 (H100 needed), d12=5 (Blackwell needed), d50=2 (community/PyPI). Remaining gaps: d22/d23=2 (GPTQ/AWQ stubs), d16/d17=4 (real GPU training), d26-d28=7 (streaming loop), d41=7, d08=8, d15=8.",
     "genuine_moat_dimensions": [
       "d01 (one-door): 9 vs best competitor 0 — UNIQUE",
       "d02 (merkle evidence): 9 vs best competitor 0 — UNIQUE",
@@ -121,61 +121,61 @@
       "d41 (eval judge pipeline): 5 → 7 — Multi-criteria judge pipeline with receipt integration and evidence chain. Wave 5."
     ],
     "cat_score_vs_max": {
-      "cat_a_constitutional": "71/80 = 88.8% — dominant; d08 revocation at 8",
-      "cat_b_hardware": "43/70 = 61.4% — Triton kernel wired into QLoRA (d15=8); d10/d11/d12 hardware-capped",
+      "cat_a_constitutional": "71/80 = 88.8% — dominant; d08=8 (revocation at 8, not yet 9)",
+      "cat_b_hardware": "46/70 = 65.7% — d09=9, d13=9, d15=8; d10/d11/d12 hardware-capped (H100/Blackwell needed)",
       "cat_c_training": "46/60 = 76.7% — SFT+QLoRA mocked pipeline (d16/d17=7); GRPO+DPO+FSDP2 at 9",
       "cat_d_quantization": "25/40 = 62.5% — GPTQ/AWQ real paths + CLI; d25 NF4 tuning next target",
       "cat_e_serving": "40/60 = 66.7% — FastAPI+streaming (d29=7), llamacpp (d30=6), vLLM (d31=6), GGUF (d24=6)",
       "cat_f_routing": "42/50 = 84.0% — circuit breaker (d32=8), JSONL cost+budget (d35=8), fallback (d36=8)",
-      "cat_g_evaluation": "43/50 = 86.0% — excellent; lm-eval+Merkle+contamination dominant; d39=9, d41=7",
-      "cat_h_experiment_tracking": "30/40 = 75.0% — real MLflow integration (d42/d43=8), leaderboard+WandB (d44/d45=7)",
-      "cat_i_ecosystem": "42/50 = 84.0% — Axolotl bridge (d46), multi-backend (d47), recipe export (d48), quant CLI (d49=8)"
+      "cat_g_evaluation": "43/50 = 86.0% — excellent; d37/d38/d39/d40=9, d41=7 (eval judge pipeline needs final push)",
+      "cat_h_experiment_tracking": "36/40 = 90.0% — d42/d43/d44/d45 all at 9; MLflow+WandB+Leaderboard fully wired",
+      "cat_i_ecosystem": "43/50 = 86.0% — d49=9 (full CLI); d46-d48 axolotl/multi-backend/recipe; d50=2 (community ceiling)"
     }
   },
   "next_4_priority_dimensions": [
     {
       "priority": 1,
-      "dimension_ids": ["d09", "d13"],
-      "name": "Wave 6A: SM detection 8→9 + quality gate 7→9 (cat_b push)",
-      "current_scores": { "d09": 8, "d13": 7 },
-      "best_competitor": { "d09": "no competitor at 9", "d13": "LlamaFactory=8" },
-      "gap_points": 3,
-      "why": "d09 has real NVML device enumeration but tests use mocked torch.cuda; adding live NVML probe tests against the actual GPU device pushes to 9. d13 quality gate fires but only theoretically; wiring it into the quant commands directly with evidence emission and a 'dojo quant gate-check' CLI command reaches 9. No GPU required for these tests.",
-      "effort": "low",
-      "unblocks": ["cat_b credibility on real hardware", "d13 becomes a true sovereignty gate"]
+      "dimension_ids": ["d22", "d23"],
+      "name": "Wave 7A: GPTQ/AWQ stub removal — hardcoded values → real mock implementations (2→6)",
+      "current_scores": { "d22": 2, "d23": 2 },
+      "best_competitor": { "d22": "LlamaFactory=7", "d23": "LlamaFactory=7" },
+      "gap_points": 8,
+      "why": "Both modules have literal '# v1 stub' comments and hardcoded return values. Replace _measure_ppl()/measure_f1() with implementations that use a tiny mock model (no GPU required: a 2-layer dummy transformer or HF TinyBERT) to compute actual perplexity/F1 deltas. This pushes 2→6 and unblocks d13 quality gate from being theoretical. Score 7 requires real gptqmodel/autoawq; 6 is achievable with mock-but-real-math path.",
+      "effort": "medium",
+      "unblocks": ["d13 quality gate becomes meaningful", "d24 GGUF from quantized model path", "cat_d 65%→80%"]
     },
     {
       "priority": 2,
-      "dimension_ids": ["d32", "d35", "d36"],
-      "name": "Wave 6B: Complete cat_f routing (circuit breaker + cost + fallback 8→9)",
-      "current_scores": { "d32": 8, "d35": 8, "d36": 8 },
-      "best_competitor": { "d32": "LiteLLM=10", "d35": "LiteLLM=9", "d36": "LiteLLM=8" },
+      "dimension_ids": ["d41", "d08"],
+      "name": "Wave 7B: Eval judge pipeline 7→9 + revocation gate 8→9",
+      "current_scores": { "d41": 7, "d08": 8 },
+      "best_competitor": { "d41": "Vertex=5", "d08": "no competitor" },
       "gap_points": 3,
-      "why": "All three routing dimensions are at 8 — one increment from 9. d32 needs one more adversarial circuit-breaker scenario (latency-based vs error-rate). d35 needs a 'budget soft-warn at 80%' threshold test + evidence emission. d36 needs a chaos-mode multi-hop fallback test. These are pure test + evidence wiring; no provider API keys needed.",
+      "why": "d41 judge pipeline at 7 needs multi-judge consensus protocol + evidence for disagreement cases + receipt linking to Merkle chain. d08 revocation at 8 needs a test simulating a real revocation server stub (HTTP) + concurrent revocation check stress test. Both are no-GPU pure implementation improvements.",
       "effort": "low",
-      "unblocks": ["cat_f 84%→90%", "routing credibility vs LiteLLM"]
+      "unblocks": ["cat_g 86%→90%", "constitutional integrity chain completeness"]
     },
     {
       "priority": 3,
-      "dimension_ids": ["d42", "d43", "d44", "d45"],
-      "name": "Wave 6C: Complete cat_h tracking (MLflow 8→9 + leaderboard/WandB 7→9)",
-      "current_scores": { "d42": 8, "d43": 8, "d44": 7, "d45": 7 },
-      "best_competitor": { "d42": "Vertex=9", "d43": "Vertex=9", "d44": "Vertex=8", "d45": "Axolotl=5" },
+      "dimension_ids": ["d26", "d27", "d28"],
+      "name": "Wave 7C: Streaming 7→9 — simulated inference loop integration",
+      "current_scores": { "d26": 7, "d27": 7, "d28": 7 },
+      "best_competitor": { "d26": "no competitor", "d27": "no competitor", "d28": "no competitor" },
       "gap_points": 6,
-      "why": "d42/d43 at 8 need MLflow wired directly into SFT/GRPO/DPO training loops (3 lines each) + 'dojo experiments list' CLI command reaching 9. d44 needs RunLeaderboard.compare_top_n() wired into 'dojo experiments compare' + evidence emission. d45 needs WandBTrainingCallback integrated into at least one trainer + test confirming callback fires. No GPU required — all mockable.",
-      "effort": "low",
-      "unblocks": ["cat_h 75%→95%", "d49 CLI completion", "dominant vs Vertex in tracking"]
+      "why": "WeightStreamer/KVCacheStreamer/PrefetchGovernor all work in isolation but have no real inference loop. Create a simulated inference loop that instantiates all three in coordination — weight layer loaded → KV cache populated → prefetch governor predicts next layer — then assert timing/memory accounting is consistent. This turns academic moats into demonstrated sovereignty. Score 9 requires integration test with coherent data flow.",
+      "effort": "medium",
+      "unblocks": ["d30 llamacpp backend credibility", "cat_e 66.7%→80%"]
     },
     {
       "priority": 4,
-      "dimension_ids": ["d21", "d49"],
-      "name": "Wave 6D: Contamination 8→9 + CLI quant 8→9 (sovereign pipeline completion)",
-      "current_scores": { "d21": 8, "d49": 8 },
-      "best_competitor": { "d21": "best competitor 3", "d49": "Axolotl=7" },
-      "gap_points": 2,
-      "why": "d21 contamination detection needs a real N-gram rolling hash corpus test (not just fixtures) to reach 9 — add a 50-entry synthetic corpus and test that real training examples are correctly flagged before they enter the dataset. d49 CLI quant needs 'dojo quant gate-check' + 'dojo experiments list/compare' commands added to the CLI + smoke tests passing. Both are pure code-path completion with no GPU dependency.",
+      "dimension_ids": ["d31", "d15"],
+      "name": "Wave 7D: vLLM 6→8 + Triton kernel 8→9",
+      "current_scores": { "d31": 6, "d15": 8 },
+      "best_competitor": { "d31": "Vertex=9, Together=8", "d15": "Unsloth=10" },
+      "gap_points": 3,
+      "why": "d31 vLLM at 6 needs async-generation test + tensor-parallel config test + evidence emission on batch completion. d15 Triton at 8 needs one more test: verify the custom CUDA kernel computes the same attention output as scaled-dot-product-attention (numerical equivalence within tolerance) to demonstrate the kernel is correct, not just wired.",
       "effort": "low",
-      "unblocks": ["cat_i 84%→88%", "d21 contamination at true 9", "d49 CLI uniquely complete vs competitors"]
+      "unblocks": ["cat_e vLLM coverage", "cat_b Triton numerical correctness"]
     }
   ]
 }
