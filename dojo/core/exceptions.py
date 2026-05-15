@@ -185,6 +185,10 @@ class JudgeDriftError(EvalError):
     """Raised when the judge-vs-gold agreement drops below the minimum threshold."""
 
 
+class EvalJudgeRejection(EvalError):
+    """Raised when all judges unanimously reject a response (verdict=FAIL)."""
+
+
 # --- Promotion ---
 
 class PromotionError(DojoError):
@@ -262,6 +266,7 @@ __all__ = [
     "RoutingProviderUnavailable",
     "EvalError",
     "EvalContaminationError",
+    "EvalJudgeRejection",
     "JudgeDriftError",
     "PromotionError",
     "PromotionBlocked",

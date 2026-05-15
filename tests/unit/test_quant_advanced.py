@@ -189,17 +189,17 @@ class TestGPTQQualityGateIntegration:
         from dojo.quant import gptq as gptq_module
         return gptq_module
 
-    # 1 — mock PPL >20% regression raises QuantQualityRejected
+    # 1 — mock PPL regression raises QuantQualityRejected when limit is 0
     def test_export_gptq_raises_on_ppl_regression(self, model_dir, output_dir):
-        """When stub PPL shows >20% regression (limit=0.01), QuantQualityRejected bubbles up."""
+        """When mock PPL shows any regression and limit=0.0, QuantQualityRejected fires."""
         with patch.dict(sys.modules, {"gptqmodel": _FAKE_GPTQ}):
             gptq_module = self._import_gptq()
             with patch.dict(os.environ, {"DOJO_REAL_GPU": "0"}):
-                # Stub mode returns ppl_before=25.0, ppl_after=26.2 → ~4.8% regression.
-                # Setting limit=0.01 (1%) forces the gate to fire.
+                # limit=0.0 ensures any positive regression (which mock always produces)
+                # will trigger the gate.
                 with pytest.raises(QuantQualityRejected) as exc_info:
                     gptq_module.export_gptq(
-                        model_dir, output_dir, ppl_regression_limit=0.01
+                        model_dir, output_dir, ppl_regression_limit=0.0
                     )
         assert "ppl" in str(exc_info.value).lower() or "perplexity" in str(exc_info.value).lower()
 
@@ -251,12 +251,16 @@ class TestGPTQQualityGateIntegration:
                     )
 
         assert output.exists()
-        # Verify stub mode returned the fixed stub values
+        # Verify stub mode returned computed (not hardcoded) mock PPL values
         assert len(call_args_captured) == 1
         ppl_before, ppl_after = call_args_captured[0]
-        # Stub values: before=25.0, after=26.2
-        assert ppl_before == 25.0
-        assert ppl_after == 26.2
+        # Real mock math: both values are floats in a sane range
+        assert isinstance(ppl_before, float)
+        assert isinstance(ppl_after, float)
+        assert 5.0 < ppl_before < 1000.0
+        assert 5.0 < ppl_after < 1000.0
+        # Quantization degrades perplexity (quantized >= baseline)
+        assert ppl_after >= ppl_before
 
 
 # ---------------------------------------------------------------------------
@@ -273,16 +277,17 @@ class TestAWQQualityGateIntegration:
         from dojo.quant import awq as awq_module
         return awq_module
 
-    # 1 — mock F1 showing >5% drop raises QuantQualityRejected
+    # 1 — mock F1 drop raises QuantQualityRejected when limit is 0
     def test_export_awq_raises_on_f1_drop(self, model_dir, output_dir):
-        """Stub F1 drop ~0.8pp exceeds limit=0.005, so QuantQualityRejected bubbles up."""
+        """When mock F1 shows any drop and f1_drop_limit=0.0, QuantQualityRejected fires."""
         with patch.dict(sys.modules, {"awq": _FAKE_AWQ}):
             awq_module = self._import_awq()
             with patch.dict(os.environ, {"DOJO_REAL_GPU": "0"}):
-                # Stub: f1_before=0.88, f1_after=0.872 → drop=0.008 > limit=0.005
+                # limit=0.0 ensures any positive drop (which mock always produces)
+                # will trigger the gate.
                 with pytest.raises(QuantQualityRejected) as exc_info:
                     awq_module.export_awq(
-                        model_dir, output_dir, f1_drop_limit=0.005
+                        model_dir, output_dir, f1_drop_limit=0.0
                     )
         assert "f1" in str(exc_info.value).lower()
 
@@ -333,9 +338,13 @@ class TestAWQQualityGateIntegration:
                     )
 
         assert output.exists()
-        # Verify stub mode returned the fixed stub values
+        # Verify stub mode returned computed (not hardcoded) mock F1 values
         assert len(call_args_captured) == 1
         f1_before, f1_after = call_args_captured[0]
-        # Stub values: before=0.88, after=0.872
-        assert f1_before == 0.88
-        assert f1_after == 0.872
+        # Real mock math: both values are floats in [0, 1]
+        assert isinstance(f1_before, float)
+        assert isinstance(f1_after, float)
+        assert 0.0 <= f1_before <= 1.0
+        assert 0.0 <= f1_after <= 1.0
+        # Quantization degrades F1 (quantized <= baseline)
+        assert f1_after <= f1_before

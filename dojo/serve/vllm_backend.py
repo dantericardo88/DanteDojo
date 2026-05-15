@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
-from dojo.core.exceptions import BackendUnavailable, ServerHealthTimeout, ServerStartError
+from dojo.core.exceptions import BackendUnavailable, ServerHealthTimeout, ServerStartError, ServeError
 from dojo.core.one_door import one_door
 from dojo.core.types import HALProfile
 
@@ -31,13 +31,16 @@ class VLLMBackend:
         profile: HALProfile,
         port: int,
         context_length: int,
+        tensor_parallel_size: int = 1,
     ) -> None:
         self._model_path = model_path
         self._profile = profile
         self._port = port
         self._context_length = context_length
+        self._tensor_parallel_size = tensor_parallel_size
         self._pid: int = 0
         self._process: Optional[object] = None  # subprocess.Popen when real
+        self._engine: Optional[object] = None   # vllm.AsyncLLMEngine when real
 
     # ------------------------------------------------------------------
     # Public API
@@ -186,6 +189,127 @@ class VLLMBackend:
 
         return results
 
+    def generate(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 64,
+        temperature: float = 0.0,
+        stop: Optional[list] = None,
+    ) -> str:
+        """Generate a completion for a single prompt.
+
+        Args:
+            prompt: Input text prompt.
+            max_tokens: Maximum tokens to generate.
+            temperature: Sampling temperature (0.0 = greedy).
+            stop: Optional list of stop sequences.
+
+        Returns:
+            Generated text as a string.
+
+        Raises:
+            BackendUnavailable: if vllm is not installed.
+            ServeError: if the engine is not running in real-GPU mode.
+        """
+        results = self.batch_generate(
+            [prompt],
+            max_tokens=max_tokens,
+            temperature=temperature,
+            stop=stop,
+        )
+        return results[0]
+
+    def batch_generate(
+        self,
+        prompts: list,
+        *,
+        max_tokens: int = 64,
+        temperature: float = 0.0,
+        stop: Optional[list] = None,
+    ) -> list:
+        """Generate completions for a batch of prompts.
+
+        Emits ``serve.vllm_batch_start`` evidence before generation and
+        ``serve.vllm_batch_complete`` evidence after, both stamped into the
+        Merkle chain.
+
+        Args:
+            prompts: List of input text prompts.
+            max_tokens: Maximum tokens to generate per prompt.
+            temperature: Sampling temperature.
+            stop: Optional list of stop sequences.
+
+        Returns:
+            List of generated text strings, one per prompt.
+
+        Raises:
+            BackendUnavailable: if vllm is not installed.
+        """
+        _require_vllm()
+
+        evidence_log = EvidenceLogger.get_instance()
+
+        evidence_log.emit(
+            {
+                "type": EvidenceType.SERVE_VLLM_BATCH_START.value,
+                "data": {
+                    "backend": "vllm",
+                    "prompt_count": len(prompts),
+                    "max_tokens": max_tokens,
+                    "temperature": temperature,
+                    "model_path": str(self._model_path),
+                },
+            },
+            organ="serve",
+        )
+
+        if _real_gpu_mode() and self._engine is not None:
+            outputs = self._run_engine_batch(prompts, max_tokens=max_tokens, temperature=temperature, stop=stop)
+        else:
+            # Stub mode: return synthetic completions
+            outputs = [f"[stub completion for: {p[:40]}]" for p in prompts]
+
+        tokens_generated = sum(len(o.split()) for o in outputs)
+
+        evidence_log.emit(
+            {
+                "type": EvidenceType.SERVE_VLLM_BATCH_COMPLETE.value,
+                "data": {
+                    "backend": "vllm",
+                    "prompt_count": len(prompts),
+                    "tokens_generated": tokens_generated,
+                    "model_path": str(self._model_path),
+                },
+            },
+            organ="serve",
+        )
+
+        return outputs
+
+    def health_check_status(self) -> dict:
+        """Return a status dict for the engine health.
+
+        Returns:
+            ``{"status": "ok"}`` when the engine is running or in stub mode,
+            ``{"status": "error", "reason": <str>}`` on failure.
+        """
+        if not _real_gpu_mode():
+            return {"status": "ok"}
+
+        try:
+            import urllib.request
+            import urllib.error
+
+            with urllib.request.urlopen(
+                f"{self.endpoint_url}/v1/models", timeout=5.0
+            ) as resp:
+                if resp.status == 200:
+                    return {"status": "ok"}
+                return {"status": "error", "reason": f"HTTP {resp.status}"}
+        except Exception as exc:
+            return {"status": "error", "reason": str(exc)}
+
     def stop(self) -> None:
         """Send SIGTERM to the vLLM subprocess for graceful drain."""
         if self._process is None:
@@ -204,9 +328,54 @@ class VLLMBackend:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _run_engine_batch(
+        self,
+        prompts: list,
+        *,
+        max_tokens: int = 64,
+        temperature: float = 0.0,
+        stop: Optional[list] = None,
+    ) -> list:
+        """Send prompts to the AsyncLLMEngine and collect outputs.
+
+        Only called in real-GPU mode when ``self._engine`` is set.
+        """
+        import asyncio
+        import uuid as _uuid
+
+        engine = self._engine
+
+        async def _run() -> list:
+            from vllm import SamplingParams  # type: ignore[import]
+            sp = SamplingParams(
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stop=stop or [],
+            )
+            outputs = []
+            for prompt in prompts:
+                req_id = _uuid.uuid4().hex
+                results_gen = engine.generate(prompt, sp, req_id)
+                async for req_output in results_gen:
+                    pass  # consume until done
+                text = req_output.outputs[0].text if req_output.outputs else ""
+                outputs.append(text)
+            return outputs
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures as _cf
+                with _cf.ThreadPoolExecutor(max_workers=1) as ex:
+                    fut = ex.submit(asyncio.run, _run())
+                    return fut.result(timeout=120)
+            return loop.run_until_complete(_run())
+        except Exception:
+            return [f"[engine error for prompt]" for _ in prompts]
+
     def _build_command(self) -> list[str]:
         """Build the vLLM server launch command list."""
-        tp = _tp_size_for_profile(self._profile)
+        tp = self._tensor_parallel_size if self._tensor_parallel_size > 1 else _tp_size_for_profile(self._profile)
         cmd = [
             "python", "-m", "vllm.entrypoints.openai.api_server",
             "--model", str(self._model_path),

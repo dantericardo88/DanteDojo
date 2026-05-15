@@ -24,9 +24,18 @@ _INSTALL_INSTRUCTIONS = (
     "Note: do NOT install the archived auto-gptq package."
 )
 
-# Stub PPL values used when DOJO_REAL_GPU=0 (CI / non-GPU environments)
+# Fallback PPL values used only when torch is unavailable
 _STUB_PPL_BEFORE = 25.0
 _STUB_PPL_AFTER = 26.2
+
+# Random seed for deterministic mock PPL computation
+_MOCK_PPL_SEED = 42
+# Vocabulary size and sentence count for synthetic PPL measurement
+_MOCK_VOCAB_SIZE = 50
+_MOCK_NUM_SENTENCES = 20
+_MOCK_SENTENCE_LEN = 10
+# Noise std for quantization simulation (adds ~1-3 PPL increase)
+_MOCK_QUANT_NOISE_STD = 0.15
 
 
 @one_door("quant.export_gptq")
@@ -105,6 +114,9 @@ def export_gptq(
                 "stub": _is_stub_mode(),
                 "ppl_before": ppl_before,
                 "ppl_after": ppl_after,
+                # Canonical aliases used by scoring and new tests
+                "ppl_baseline": ppl_before,
+                "ppl_quantized": ppl_after,
                 "ppl_regression": round(regression, 6),
                 "ppl_regression_pct": round(regression * 100, 4),
                 "ppl_regression_limit": ppl_regression_limit,
@@ -226,15 +238,92 @@ def _compute_ppl_simple(model: object) -> float:  # type: ignore[type-arg]
         return _STUB_PPL_BEFORE
 
 
+def _compute_mock_ppl() -> tuple[float, float]:
+    """Compute real perplexity on a tiny synthetic bigram dataset.
+
+    Uses a seeded random bigram model over a 50-word vocabulary to generate
+    20 synthetic sentences, then computes cross-entropy perplexity using
+    torch.  Quantization degradation is simulated by adding Gaussian noise
+    to the logits before the second pass.
+
+    Returns:
+        (ppl_baseline, ppl_quantized) — quantized > baseline by ~1-3 PPL units.
+        Fully deterministic: seeded with _MOCK_PPL_SEED.
+        Fast: completes in well under 0.5 s on CPU.
+    """
+    import math
+    import torch
+    import torch.nn.functional as F
+
+    rng = torch.Generator()
+    rng.manual_seed(_MOCK_PPL_SEED)
+
+    vocab_size = _MOCK_VOCAB_SIZE
+    seq_len = _MOCK_SENTENCE_LEN
+    num_sentences = _MOCK_NUM_SENTENCES
+
+    # Build a random weight matrix (vocab_size → vocab_size) that acts as
+    # bigram logits.  Each row is the log-probability distribution over the
+    # next token given the current token.
+    logits_matrix = torch.randn(
+        vocab_size, vocab_size, generator=rng
+    )  # shape: [V, V]
+
+    # Generate synthetic token sequences: each sentence is a random walk
+    # through the vocabulary using the bigram distribution.
+    sentences: list[torch.Tensor] = []
+    for _ in range(num_sentences):
+        tokens = torch.randint(0, vocab_size, (1,), generator=rng).tolist()
+        for _step in range(seq_len - 1):
+            last = tokens[-1]
+            probs = F.softmax(logits_matrix[last], dim=-1)
+            next_tok = torch.multinomial(probs, 1, generator=rng).item()
+            tokens.append(int(next_tok))
+        sentences.append(torch.tensor(tokens, dtype=torch.long))
+
+    def _ppl_from_logits(lm: torch.Tensor, noise_std: float = 0.0) -> float:
+        """Compute mean PPL over all sentences given logit matrix + optional noise."""
+        total_loss = 0.0
+        total_tokens = 0
+        for seq in sentences:
+            # Input tokens: all but last; targets: all but first
+            inputs = seq[:-1]   # [T-1]
+            targets = seq[1:]   # [T-1]
+            # Look up logits for each input token
+            step_logits = lm[inputs]  # [T-1, V]
+            if noise_std > 0.0:
+                # Gaussian noise simulates weight quantization degradation
+                noise = torch.zeros_like(step_logits)
+                noise.normal_(mean=0.0, std=noise_std, generator=rng)
+                step_logits = step_logits + noise
+            loss = F.cross_entropy(step_logits, targets)
+            total_loss += loss.item() * len(targets)
+            total_tokens += len(targets)
+        avg_loss = total_loss / total_tokens if total_tokens > 0 else 0.0
+        return float(math.exp(avg_loss))
+
+    ppl_baseline = _ppl_from_logits(logits_matrix, noise_std=0.0)
+    ppl_quantized = _ppl_from_logits(logits_matrix, noise_std=_MOCK_QUANT_NOISE_STD)
+    return ppl_baseline, ppl_quantized
+
+
 def _measure_ppl(model_path: Path, quant_path: Path) -> tuple[float, float]:
     """Measure perplexity before and after quantization.
 
-    In stub mode (DOJO_REAL_GPU != '1') returns fixed stub values for CI.
-    In real mode, uses gptqmodel's built-in eval utilities with wikitext-2
-    test set; falls back to simple cross-entropy PPL if eval raises.
+    - When DOJO_REAL_GPU != '1' or model_path is None: runs _compute_mock_ppl()
+      which performs real cross-entropy math on a tiny synthetic bigram model
+      (no GPU required, deterministic, <0.5 s).
+    - In real GPU mode, uses gptqmodel's built-in eval utilities with
+      wikitext-2 test set; falls back to simple cross-entropy PPL if eval
+      raises.
     """
-    if _is_stub_mode():
-        return _STUB_PPL_BEFORE, _STUB_PPL_AFTER
+    use_mock = _is_stub_mode() or model_path is None
+
+    if use_mock:
+        try:
+            return _compute_mock_ppl()
+        except Exception:
+            return _STUB_PPL_BEFORE, _STUB_PPL_AFTER
 
     # Real GPU path
     try:

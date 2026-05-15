@@ -21,7 +21,7 @@ from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import PassportRevoked, PromotionBlocked, RoutingProviderUnavailable
 from dojo.core.types import ConstitutionalPassport, ModelArtifact, PrivacyTier, RoutingOption, RoutingPolicy
 from dojo.promote.gate import GateState, promote
-from dojo.promote.revocation import check_revocation
+from dojo.promote.revocation import _cache_clear, check_revocation
 from dojo.route import router
 from dojo.route.router import dispatch
 
@@ -32,12 +32,14 @@ from dojo.route.router import dispatch
 
 @pytest.fixture(autouse=True)
 def clear_evidence_and_dead_providers():
-    """Reset evidence logger and dead providers set between tests."""
+    """Reset evidence logger, dead providers set, and revocation cache between tests."""
     EvidenceLogger.clear()
     router._DEAD_PROVIDERS.clear()
+    _cache_clear()
     yield
     EvidenceLogger.clear()
     router._DEAD_PROVIDERS.clear()
+    _cache_clear()
 
 
 def _make_passport(

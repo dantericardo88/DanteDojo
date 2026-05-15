@@ -208,6 +208,8 @@ class EvidenceType(str, Enum):
     SERVE_START = "serve.start"
     SERVE_READY = "serve.ready"
     SERVE_STOPPED = "serve.stopped"
+    SERVE_VLLM_BATCH_START = "serve.vllm_batch_start"
+    SERVE_VLLM_BATCH_COMPLETE = "serve.vllm_batch_complete"
 
     # Routing
     ROUTE_DECISION = "route.decision"
@@ -254,6 +256,8 @@ class EvidenceType(str, Enum):
     PREFETCH_ISSUED = "stream.prefetch.issued"
     BLOCK_QUANTIZED = "stream.block.quantized"
     SOVEREIGN_HALT = "stream.sovereign.halt"
+    INFERENCE_LOOP_STEP = "stream.inference_loop_step"
+    INFERENCE_LOOP_COMPLETE = "stream.loop_complete"
 
     # Evidence chain
     EVIDENCE_CHAIN_SEALED = "evidence.chain_sealed"

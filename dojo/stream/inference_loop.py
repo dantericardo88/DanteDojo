@@ -1,11 +1,13 @@
 """Constitutional VRAM-bounded inference loop using WeightStreamer."""
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import Any, Dict, List, Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import DojoError
 from dojo.stream.weight_streamer import WeightStreamer
+from dojo.stream.kv_cache_streamer import KVCacheStreamer
+from dojo.stream.prefetch_governor import PrefetchGovernor
 
 
 class InferenceLoopError(DojoError):
@@ -101,3 +103,157 @@ class LayerStreamingInferenceLoop:
             "Real forward pass not implemented; use mock_mode=True in CI",
             reason="real_mode_not_implemented",
         )
+
+
+class InferenceLoopSimulator:
+    """Coordinated simulation of WeightStreamer + KVCacheStreamer + PrefetchGovernor.
+
+    Each inference step:
+    1. WeightStreamer loads the current layer (round-robin over n_layers).
+    2. KVCacheStreamer stores the KV activations for that layer.
+    3. PrefetchGovernor schedules the *next* layer before the current one finishes.
+    4. Current layer is evicted from VRAM.
+    5. Evidence is emitted: stream.inference_loop_step per step, stream.loop_complete at end.
+
+    Memory accounting (all in MB):
+        vram_mb = layer_size_mb * (layers currently loaded)
+                + kv_cache_mb_per_layer * (KV entries cached)
+    Because we load one layer at a time and evict before the next, the layer
+    contribution is always exactly layer_size_mb during a step and 0 between
+    steps.  KV cache grows by kv_cache_mb_per_layer each step (no eviction
+    unless the budget would be exceeded).
+    """
+
+    def __init__(
+        self,
+        n_layers: int,
+        layer_size_mb: float,
+        kv_cache_mb_per_layer: float,
+        kv_budget_mb: Optional[float] = None,
+        mock_mode: bool = True,
+        evidence: Optional[EvidenceLogger] = None,
+    ) -> None:
+        if n_layers < 1:
+            raise InferenceLoopError("n_layers must be >= 1")
+        if layer_size_mb <= 0:
+            raise InferenceLoopError("layer_size_mb must be positive")
+        if kv_cache_mb_per_layer <= 0:
+            raise InferenceLoopError("kv_cache_mb_per_layer must be positive")
+
+        self.n_layers = n_layers
+        self.layer_size_mb = layer_size_mb
+        self.kv_cache_mb_per_layer = kv_cache_mb_per_layer
+        self._evidence = evidence or EvidenceLogger.get_instance()
+
+        # KV budget: default to enough for all layers × 10 steps (never a
+        # bottleneck in normal simulations unless caller sets a tight budget).
+        if kv_budget_mb is None:
+            kv_budget_mb = kv_cache_mb_per_layer * n_layers * 10 + 1
+
+        # KVCacheStreamer works in integer "tokens"; we scale MB to integer
+        # units by multiplying by 1000 so fractional MB values are preserved.
+        self._kv_scale = 1000
+        kv_max_cache_size = int(kv_budget_mb * self._kv_scale)
+
+        self.weight_streamer = WeightStreamer(mock_mode=mock_mode)
+        self.kv_streamer = KVCacheStreamer(
+            max_cache_size=kv_max_cache_size,
+            mock_mode=mock_mode,
+        )
+        self.prefetch_governor = PrefetchGovernor(
+            max_lookahead=1,
+            mock_mode=mock_mode,
+        )
+
+    # ------------------------------------------------------------------
+    # Public API
+    # ------------------------------------------------------------------
+
+    def run(self, n_steps: int) -> Dict[str, Any]:
+        """Run the simulated inference loop for n_steps steps.
+
+        Returns:
+            {
+                "steps_completed": int,
+                "peak_vram_mb": float,
+                "layers_loaded": List[str],
+            }
+        """
+        if n_steps < 0:
+            raise InferenceLoopError("n_steps must be >= 0")
+
+        layers_loaded: List[str] = []
+        peak_vram_mb: float = 0.0
+        kv_entries_cached = 0
+
+        for step in range(n_steps):
+            layer_idx = step % self.n_layers
+            layer_id = f"layer_{layer_idx}"
+
+            # 3. PrefetchGovernor: schedule the *next* layer ahead of time.
+            #    We do this before loading the current layer so the prefetch
+            #    is "in flight" while the current layer is being processed.
+            next_idx = (step + 1) % self.n_layers
+            next_layer_id = f"layer_{next_idx}"
+            # Drain any stale pending entry first so the window never overruns.
+            self.prefetch_governor.pending.clear()
+            self.prefetch_governor.issue_prefetch([next_layer_id])
+
+            # 1. WeightStreamer: load the current layer into VRAM.
+            self.weight_streamer.stream_layer(layer_id, source_tier="ram")
+            layers_loaded.append(layer_id)
+
+            # 2. KVCacheStreamer: store KV activations for this layer.
+            kv_key = f"kv_step{step}_layer{layer_idx}"
+            kv_size = int(self.kv_cache_mb_per_layer * self._kv_scale)
+            self.kv_streamer.page_kv_entry(kv_key, f"activation_{layer_id}", kv_size)
+            kv_entries_cached += 1
+
+            # Memory accounting for this step.
+            # Layer is still in VRAM here (loaded, not yet evicted).
+            vram_mb = (
+                self.layer_size_mb                              # one layer in VRAM
+                + self.kv_cache_mb_per_layer * kv_entries_cached  # KV cache so far
+            )
+            if vram_mb > peak_vram_mb:
+                peak_vram_mb = vram_mb
+
+            # Consume the prefetch entry (layer "arrived").
+            self.prefetch_governor.consume_prefetch(next_layer_id)
+
+            # Evict current layer before next iteration.
+            self.weight_streamer.evict_current()
+
+            # Emit per-step evidence.
+            self._evidence.emit(
+                {
+                    "type": EvidenceType.INFERENCE_LOOP_STEP.value,
+                    "data": {
+                        "step": step,
+                        "layer_id": layer_id,
+                        "vram_mb": vram_mb,
+                        "kv_entries_cached": kv_entries_cached,
+                        "prefetch_scheduled": next_layer_id,
+                    },
+                },
+                organ="stream",
+            )
+
+        # Emit loop-complete evidence.
+        self._evidence.emit(
+            {
+                "type": EvidenceType.INFERENCE_LOOP_COMPLETE.value,
+                "data": {
+                    "steps_completed": n_steps,
+                    "peak_vram_mb": peak_vram_mb,
+                    "layers_loaded_count": len(layers_loaded),
+                },
+            },
+            organ="stream",
+        )
+
+        return {
+            "steps_completed": n_steps,
+            "peak_vram_mb": peak_vram_mb,
+            "layers_loaded": layers_loaded,
+        }

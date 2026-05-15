@@ -18,7 +18,7 @@ from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import PassportRevoked
 from dojo.core.types import ConstitutionalPassport, ModelArtifact
 from dojo.promote.gate import promote
-from dojo.promote.revocation import check_revocation
+from dojo.promote.revocation import _cache_clear, check_revocation
 
 
 # ---------------------------------------------------------------------------
@@ -73,8 +73,10 @@ def _make_http_response(body: dict[str, Any], status: int = 200) -> MagicMock:
 @pytest.fixture(autouse=True)
 def clear_evidence() -> Generator[None, None, None]:
     EvidenceLogger.clear()
+    _cache_clear()
     yield
     EvidenceLogger.clear()
+    _cache_clear()
 
 
 # ---------------------------------------------------------------------------
