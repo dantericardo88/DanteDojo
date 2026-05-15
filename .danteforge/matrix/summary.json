@@ -52,7 +52,7 @@
     }
   },
   "category_totals": {
-    "dante_dojo":    { "cat_a": 68, "cat_b": 36, "cat_c": 40, "cat_d": 25, "cat_e": 40, "cat_f": 38, "cat_g": 40, "cat_h": 30, "cat_i": 33, "raw_total": 350 },
+    "dante_dojo":    { "cat_a": 68, "cat_b": 36, "cat_c": 46, "cat_d": 25, "cat_e": 40, "cat_f": 42, "cat_g": 40, "cat_h": 30, "cat_i": 42, "raw_total": 369 },
     "axolotl":       { "cat_a":  3, "cat_b": 34, "cat_c": 27, "cat_d": 19, "cat_e": 15, "cat_f":  0, "cat_g":  7, "cat_h": 24, "cat_i": 24, "raw_total": 153 },
     "unsloth":       { "cat_a":  2, "cat_b": 32, "cat_c": 21, "cat_d": 21, "cat_e": 14, "cat_f":  0, "cat_g":  5, "cat_h": 20, "cat_i": 23, "raw_total": 138 },
     "llamafactory":  { "cat_a":  3, "cat_b": 33, "cat_c": 28, "cat_d": 21, "cat_e": 18, "cat_f":  0, "cat_g":  8, "cat_h": 24, "cat_i": 25, "raw_total": 160 },
@@ -64,7 +64,7 @@
     "modal":         { "cat_a":  2, "cat_b": 22, "cat_c":  8, "cat_d":  9, "cat_e": 14, "cat_f": 12, "cat_g":  2, "cat_h": 13, "cat_i": 16, "raw_total":  98 }
   },
   "rankings": [
-    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 350, "pct": 70.0, "moat": "Constitutional sovereignty moat intact (cat_a=68/80, 85%). GRPO+DPO RL trainers (d18/d19=9), FSDP2 (d14=9), lm-eval harness (d37=9), Merkle eval receipt (d40=9), contamination detection (d38=9). Wave 1+2: +39 pts (311→350). Quant real paths (d22/d23/d24=6), serving complete (d29=7/d30=6/d31=6), streaming integration (d26/d27/d28=7), experiment tracking wired to real MLflow (d42/d43=8), leaderboard+WandB (d44/d45=7), quant CLI commands (d49=8). Lead over #2 now 165 pts." },
+    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 369, "pct": 73.8, "moat": "Constitutional sovereignty moat intact (cat_a=68/80, 85%). GRPO+DPO RL trainers (d18/d19=9), FSDP2 (d14=9), lm-eval harness (d37=9), Merkle eval receipt (d40=9), contamination detection (d38=9). Wave 1+2+3: +58 pts (311→369). SFT/QLoRA real mocked pipeline (d16/d17=7), routing circuit breaker + JSONL cost persistence (d32=8/d35=8/d36=8), Axolotl bridge + recipe export (d46/d47/d48 upgraded). Lead over #2 now 184 pts." },
     { "rank": 2,  "competitor": "vertex_ai",    "raw_total": 185, "pct": 37.0, "moat": "Managed scale + Experiments tracking. cat_h=29 best-in-class." },
     { "rank": 3,  "competitor": "llamafactory", "raw_total": 160, "pct": 32.0, "moat": "Broadest algorithm coverage (SFT+DPO+PPO+ORPO). Best all-in-one OSS." },
     { "rank": 4,  "competitor": "together_ai",  "raw_total": 158, "pct": 31.6, "moat": "Cloud-scale SFT + OpenAI-compatible API. Llama/Mistral focus." },
@@ -76,7 +76,7 @@
     { "rank": 10, "competitor": "litellm",      "raw_total":  83, "pct": 16.6, "moat": "Best-in-class routing (d32=10) and cost tracking (d35=9). Routing-only." }
   ],
   "dante_dojo_analysis": {
-    "note": "Post-Wave-1+2 2026-05-15. raw_total 311→350 (+39 pts). Constitutional moat intact. cat_d (quant) 13→25, cat_e (serving) 26→40, cat_f (routing) 35→38, cat_h (exp tracking) 22→30, cat_i (ecosystem) 31→33. Remaining gaps: SFT/QLoRA GPU-tested (d16/d17=4), Triton kernel integration (d15=5), FP8 training (d11=5), vLLM 3.x w/ paged attention (d31 capped at 6 without real GPU).",
+    "note": "Post-Wave-1+2+3 2026-05-15. raw_total 311→369 (+58 pts). Constitutional moat intact. cat_c (training) 40→46, cat_f (routing) 38→42, cat_i (ecosystem) 33→42. Remaining natural ceilings: Triton integration (d15=5, needs QLoRA wiring), FP8 (d11=5, needs H100), FP4 (d12=5, needs Blackwell), community/PyPI (d50=1, business metric). Next targets: d09 real SM detection, d15 Triton wiring, d25 NF4 tuning.",
     "genuine_moat_dimensions": [
       "d01 (one-door): 9 vs best competitor 0 — UNIQUE",
       "d02 (merkle evidence): 9 vs best competitor 0 — UNIQUE",
@@ -118,14 +118,14 @@
     ],
     "cat_score_vs_max": {
       "cat_a_constitutional": "68/80 = 85.0% — dominant",
-      "cat_b_hardware": "36/70 = 51.4% — Triton kernel exists; d26/d27/d28 now 7 with integration tests",
-      "cat_c_training": "40/60 = 66.7% — GRPO+DPO+FSDP2 strong; SFT/QLoRA GPU-untested still the drag",
-      "cat_d_quantization": "25/40 = 62.5% — GPTQ/AWQ real paths + CLI commands; GPU cap at 6 without hardware",
+      "cat_b_hardware": "36/70 = 51.4% — Triton kernel exists; d26/d27/d28 now 7; d15 integration pending",
+      "cat_c_training": "46/60 = 76.7% — SFT+QLoRA mocked pipeline (d16/d17=7); GRPO+DPO+FSDP2 at 9",
+      "cat_d_quantization": "25/40 = 62.5% — GPTQ/AWQ real paths + CLI; d25 NF4 tuning next target",
       "cat_e_serving": "40/60 = 66.7% — FastAPI+streaming (d29=7), llamacpp (d30=6), vLLM (d31=6), GGUF (d24=6)",
-      "cat_f_routing": "38/50 = 76.0% — circuit breaker, cost tracking, privacy+local routing all dominant",
+      "cat_f_routing": "42/50 = 84.0% — circuit breaker (d32=8), JSONL cost+budget (d35=8), fallback (d36=8)",
       "cat_g_evaluation": "40/50 = 80.0% — excellent; lm-eval+Merkle+contamination dominant",
       "cat_h_experiment_tracking": "30/40 = 75.0% — real MLflow integration (d42/d43=8), leaderboard+WandB (d44/d45=7)",
-      "cat_i_ecosystem": "33/50 = 66.0% — quant CLI commands added (d49=8); community=1 is anchor"
+      "cat_i_ecosystem": "42/50 = 84.0% — Axolotl bridge (d46), multi-backend (d47), recipe export (d48), quant CLI (d49=8)"
     }
   },
   "next_4_priority_dimensions": [
