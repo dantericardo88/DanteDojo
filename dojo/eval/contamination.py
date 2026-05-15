@@ -217,8 +217,189 @@ def _emit_contamination_evidence(logger: EvidenceLogger, report: ContaminationRe
     )
 
 
+# ---------------------------------------------------------------------------
+# N-gram based contamination detection  (scan_dataset / ScanReport)
+# ---------------------------------------------------------------------------
+
+@dataclass
+class ScanReport:
+    """Report from scan_dataset() — n-gram based contamination scan.
+
+    Attributes:
+        contaminated_count: Number of dataset entries flagged as contaminated.
+        clean_count: Number of dataset entries that passed clean.
+        total_count: Total entries in the dataset (contaminated + clean).
+        contamination_rate: contaminated_count / total_count (0.0 if total=0).
+        ngram_size: N-gram window size used for the scan.
+        details: Per-entry detail dicts with keys "text", "ngram_matches", "contaminated".
+    """
+
+    contaminated_count: int
+    clean_count: int
+    total_count: int
+    ngram_size: int = 3
+    details: List[dict] = field(default_factory=list)
+
+    @property
+    def contamination_rate(self) -> float:
+        if self.total_count == 0:
+            return 0.0
+        return self.contaminated_count / self.total_count
+
+
+def _build_ngram_hashes(text: str, n: int) -> FrozenSet[str]:
+    """Return the set of SHA-256 digests of every n-gram in *text*."""
+    normalized = _normalize_text(text)
+    tokens = normalized.split()
+    if len(tokens) < n:
+        # Fall back to whole-text hash for very short texts
+        return frozenset([_sha256_text(normalized)])
+    hashes: List[str] = []
+    for i in range(len(tokens) - n + 1):
+        ngram = " ".join(tokens[i : i + n])
+        hashes.append(hashlib.sha256(ngram.encode("utf-8")).hexdigest())
+    return frozenset(hashes)
+
+
+def _build_corpus_ngram_index(corpus: List[str], n: int) -> FrozenSet[str]:
+    """Build a single frozenset of all n-gram hashes from every text in *corpus*."""
+    all_hashes: List[str] = []
+    for text in corpus:
+        all_hashes.extend(_build_ngram_hashes(text, n))
+    return frozenset(all_hashes)
+
+
+def scan_dataset(
+    dataset: List[str],
+    corpus: List[str],
+    *,
+    n_gram_size: int = 3,
+    match_threshold: int = 1,
+    fail_closed: bool = False,
+) -> ScanReport:
+    """Scan *dataset* entries for n-gram contamination against *corpus*.
+
+    For each entry in *dataset*, computes its n-gram hashes and checks how many
+    appear in the corpus n-gram index.  An entry is flagged *contaminated* when
+    the number of matching n-grams is >= *match_threshold*.
+
+    Always emits ``eval.contamination_detected`` evidence via EvidenceLogger
+    regardless of whether any contamination was found.
+
+    Args:
+        dataset: List of text strings to scan (the evaluation set to protect).
+        corpus: List of text strings to build the contamination fingerprint from
+                (typically the training corpus).  Empty corpus → flags nothing.
+        n_gram_size: Window size for n-gram tokenisation (1 = unigram, …).
+        match_threshold: Minimum number of matching n-grams to flag an entry.
+        fail_closed: If True, raise EvalContaminationError on first hit.
+
+    Returns:
+        ScanReport with contaminated_count, clean_count, total_count, etc.
+
+    Raises:
+        EvalContaminationError: Only when fail_closed=True and contamination found.
+    """
+    logger = EvidenceLogger.get_instance()
+
+    # Empty corpus → no fingerprints, nothing can match
+    if not corpus:
+        report = ScanReport(
+            contaminated_count=0,
+            clean_count=len(dataset),
+            total_count=len(dataset),
+            ngram_size=n_gram_size,
+            details=[],
+        )
+        logger.emit(
+            {
+                "type": "eval.contamination_detected",
+                "data": {
+                    "contaminated_count": 0,
+                    "clean_count": len(dataset),
+                    "total_count": len(dataset),
+                    "ngram_matches": 0,
+                    "n_gram_size": n_gram_size,
+                    "corpus_size": 0,
+                },
+            },
+            organ="eval",
+        )
+        return report
+
+    corpus_index = _build_corpus_ngram_index(corpus, n_gram_size)
+
+    contaminated_count = 0
+    clean_count = 0
+    details: List[dict] = []
+
+    for text in dataset:
+        entry_ngrams = _build_ngram_hashes(text, n_gram_size)
+        matches = len(entry_ngrams & corpus_index)
+        is_contaminated = matches >= match_threshold
+        if is_contaminated:
+            contaminated_count += 1
+        else:
+            clean_count += 1
+        details.append({
+            "text": text[:120],
+            "ngram_matches": matches,
+            "contaminated": is_contaminated,
+        })
+
+        if fail_closed and is_contaminated:
+            # Emit partial evidence then raise
+            logger.emit(
+                {
+                    "type": "eval.contamination_detected",
+                    "data": {
+                        "contaminated_count": contaminated_count,
+                        "clean_count": clean_count,
+                        "total_count": contaminated_count + clean_count,
+                        "ngram_matches": matches,
+                        "n_gram_size": n_gram_size,
+                        "corpus_size": len(corpus),
+                        "fail_closed": True,
+                    },
+                },
+                organ="eval",
+            )
+            raise EvalContaminationError(
+                f"Contamination detected via {n_gram_size}-gram scan ({matches} matches)",
+                reason=f"text={text[:60]!r} matched {matches} n-grams in corpus",
+            )
+
+    total_count = len(dataset)
+    report = ScanReport(
+        contaminated_count=contaminated_count,
+        clean_count=clean_count,
+        total_count=total_count,
+        ngram_size=n_gram_size,
+        details=details,
+    )
+
+    logger.emit(
+        {
+            "type": "eval.contamination_detected",
+            "data": {
+                "contaminated_count": contaminated_count,
+                "clean_count": clean_count,
+                "total_count": total_count,
+                "ngram_matches": contaminated_count,  # total entries flagged
+                "n_gram_size": n_gram_size,
+                "corpus_size": len(corpus),
+            },
+        },
+        organ="eval",
+    )
+
+    return report
+
+
 __all__ = [
     "ContaminationReport",
+    "ScanReport",
     "hash_corpus_sample",
+    "scan_dataset",
     "stream_check_contamination",
 ]

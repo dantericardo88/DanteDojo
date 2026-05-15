@@ -8,12 +8,29 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
+from enum import Enum
 from pathlib import Path
 from typing import Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import BudgetExceeded
 from dojo.core.types import CostReceipt, RoutingOption
+
+
+class BudgetStatus(str, Enum):
+    """Return value from check_budget() indicating the budget state.
+
+    - OK: usage < 80% of the monthly limit
+    - SOFT_WARN: 80% <= usage < 100% of the monthly limit
+    - EXCEEDED: usage >= 100% (BudgetExceeded is also raised)
+    """
+    OK = "ok"
+    SOFT_WARN = "soft_warn"
+    EXCEEDED = "exceeded"
+
+
+# Soft-warn threshold fraction (80%)
+_SOFT_WARN_FRACTION: float = 0.80
 
 _DEFAULT_STORAGE = Path.home() / ".dante" / "cost_receipts.jsonl"
 
@@ -36,6 +53,13 @@ class CostTracker:
     ) -> None:
         self._storage_path = storage_path or _DEFAULT_STORAGE
         self.monthly_limit_usd = monthly_limit_usd
+        # Track whether a soft-warn has already been emitted this month to
+        # avoid duplicate evidence for repeated calls at the same spend level.
+        self._soft_warn_emitted: bool = False
+
+    def reset_monthly(self) -> None:
+        """Reset soft-warn state (call when starting a new billing month)."""
+        self._soft_warn_emitted = False
 
     # ------------------------------------------------------------------
     # Public API
@@ -171,14 +195,19 @@ class CostTracker:
             "receipts": count,
         }
 
-    def check_budget(self, estimated_cost_usd: float) -> None:
+    def check_budget(self, estimated_cost_usd: float) -> BudgetStatus:
         """Check whether adding estimated_cost_usd would exceed the monthly limit.
 
         Emits ROUTE_COST_RECEIPT evidence with budget status regardless of outcome.
+        Emits ``cost.budget_soft_warn`` evidence the first time spend crosses 80%.
         Raises BudgetExceeded if the projected total would exceed monthly_limit_usd.
 
         Args:
             estimated_cost_usd: Estimated cost in USD for the pending request.
+
+        Returns:
+            BudgetStatus.OK if projected < 80% of limit.
+            BudgetStatus.SOFT_WARN if 80% <= projected < 100% of limit.
 
         Raises:
             BudgetExceeded: If current spend + estimated_cost_usd > monthly_limit_usd.
@@ -190,6 +219,25 @@ class CostTracker:
         projected = summary["total_cost_usd"] + estimated_cost_usd
 
         logger = EvidenceLogger.get_instance()
+
+        # Determine status
+        if self.monthly_limit_usd and projected > self.monthly_limit_usd:
+            status = BudgetStatus.EXCEEDED
+        elif (
+            self.monthly_limit_usd
+            and projected >= self.monthly_limit_usd * _SOFT_WARN_FRACTION
+        ):
+            status = BudgetStatus.SOFT_WARN
+        else:
+            status = BudgetStatus.OK
+
+        # Use legacy-compatible strings in the evidence payload so existing
+        # consumers checking "within_budget" / "over_budget" continue to work.
+        _legacy_status = {
+            BudgetStatus.OK: "within_budget",
+            BudgetStatus.SOFT_WARN: "soft_warn",
+            BudgetStatus.EXCEEDED: "over_budget",
+        }[status]
         logger.emit(
             {
                 "type": EvidenceType.ROUTE_COST_RECEIPT.value,
@@ -199,13 +247,29 @@ class CostTracker:
                     "current_spend_usd": summary["total_cost_usd"],
                     "estimated_new_cost_usd": estimated_cost_usd,
                     "projected_total_usd": projected,
-                    "status": "within_budget" if projected <= self.monthly_limit_usd else "over_budget",
+                    "status": _legacy_status,
                 },
             },
             organ="route",
         )
 
-        if projected > self.monthly_limit_usd:
+        # Emit soft-warn evidence on first crossing
+        if status == BudgetStatus.SOFT_WARN and not self._soft_warn_emitted:
+            self._soft_warn_emitted = True
+            logger.emit(
+                {
+                    "type": "cost.budget_soft_warn",
+                    "data": {
+                        "monthly_limit_usd": self.monthly_limit_usd,
+                        "projected_total_usd": projected,
+                        "usage_fraction": projected / self.monthly_limit_usd,
+                        "threshold_fraction": _SOFT_WARN_FRACTION,
+                    },
+                },
+                organ="route",
+            )
+
+        if status == BudgetStatus.EXCEEDED:
             raise BudgetExceeded(
                 f"Request would exceed monthly budget: ${projected:.4f} > ${self.monthly_limit_usd:.4f}",
                 reason=(
@@ -214,6 +278,8 @@ class CostTracker:
                     f"limit=${self.monthly_limit_usd:.4f}"
                 ),
             )
+
+        return status
 
     def load_receipts(self) -> list[CostReceipt]:
         """Load all receipts from JSONL storage.
@@ -265,4 +331,4 @@ def _dict_to_receipt(data: dict) -> CostReceipt:
     )
 
 
-__all__ = ["CostTracker"]
+__all__ = ["BudgetStatus", "CostTracker"]

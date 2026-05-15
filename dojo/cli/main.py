@@ -386,21 +386,51 @@ def experiments_list(
 
 @experiments_app.command("compare")
 def experiments_compare(
-    run_id_1: str = typer.Argument(..., help="First run ID"),
-    run_id_2: str = typer.Argument(..., help="Second run ID"),
+    experiment: str = typer.Option("", "--experiment", help="Experiment name to load runs from"),
     metric: str = typer.Option("loss", "--metric", help="Primary metric for ranking"),
+    top_n: int = typer.Option(5, "--top-n", help="Number of top runs to compare"),
+    higher_is_better: bool = typer.Option(False, "--higher-is-better", help="Higher metric value = better rank"),
     json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
-    """Compare two experiment runs side-by-side."""
-    lb = RunLeaderboard(primary_metric=metric, higher_is_better=False)
-    lb.add_run(run_id_1, run_id_1, "", {metric: 0.0})
-    lb.add_run(run_id_2, run_id_2, "", {metric: 0.0})
-    result = lb.compare_top_n(n=2)
+    """Compare the top N experiment runs ranked by primary metric."""
+    from dojo.core.evidence import EvidenceLogger
+    tracker = ExperimentTracker()
+    lb = RunLeaderboard.from_tracker(
+        tracker,
+        experiment_name=experiment,
+        primary_metric=metric,
+        higher_is_better=higher_is_better,
+    )
+    result = lb.compare_top_n(n=top_n)
+
+    EvidenceLogger.get_instance().emit(
+        {
+            "type": "experiment.leaderboard_compare",
+            "data": {
+                "experiment": experiment,
+                "metric": metric,
+                "top_n": top_n,
+                "run_count": len(result),
+            },
+        },
+        organ="experiment",
+    )
+
     if json_out:
         typer.echo(json.dumps(result, indent=2, default=str))
-    else:
-        for rid, info in result.items():
-            console.print(f"[bold]{rid}[/bold]  rank={info.get('rank')}  baseline={info.get('baseline_run_id')}")
+        return
+    if not result:
+        console.print("[yellow]No runs to compare.[/yellow]")
+        return
+    t = Table("Rank", "Run ID", "Run Name", "Baseline Run")
+    for rid, info in result.items():
+        t.add_row(
+            str(info.get("rank", "")),
+            rid,
+            info.get("run_name", ""),
+            info.get("baseline_run_id", ""),
+        )
+    console.print(t)
 
 
 @experiments_app.command("leaderboard")
@@ -599,6 +629,43 @@ def quant_gptq(
         console.print(f"  Bits:   {bits}-bit  group={group_size}")
 
 
+@quant_app.command("gate-check")
+def quant_gate_check(
+    model_path: str = typer.Option("", "--model-path", help="Path to original (base) model or quant output directory (informational)"),
+    quant_type: str = typer.Option("gguf", "--quant-type", help="Quantization type: gguf, gptq, or awq"),
+    threshold: float = typer.Option(0.1, "--threshold", help="Max allowed fractional degradation (0.1 = 10%)"),
+    ppl_before: float = typer.Option(0.0, "--ppl-before", help="Baseline perplexity (0 = use stub values)"),
+    ppl_after: float = typer.Option(0.0, "--ppl-after", help="Quantized perplexity (0 = use stub values)"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Run the post-quantization quality gate check.
+
+    Emits quant.gate_check evidence and exits 0 if within threshold, 1 if not.
+    """
+    from dojo.quant.gate import check_quality_gate
+    from dojo.core.exceptions import QuantQualityRejected
+
+    try:
+        result = check_quality_gate(
+            quant_type=quant_type,
+            threshold=threshold,
+            ppl_before=ppl_before if ppl_before > 0 else None,
+            ppl_after=ppl_after if ppl_after > 0 else None,
+        )
+        if json_out:
+            typer.echo(json.dumps(result, indent=2))
+        else:
+            console.print(f"[green]Quality gate PASSED[/green] ({quant_type})")
+            console.print(f"  Degradation: {result.get('degradation', 0):.4f} (threshold={threshold})")
+        raise typer.Exit(code=0)
+    except QuantQualityRejected as exc:
+        if json_out:
+            typer.echo(json.dumps({"passed": False, "reason": str(exc)}, indent=2))
+        else:
+            console.print(f"[red]Quality gate FAILED[/red] ({quant_type}): {exc}")
+        raise typer.Exit(code=1)
+
+
 @quant_app.command("awq")
 def quant_awq(
     model_path: str = typer.Argument(..., help="Path to HuggingFace model directory"),
@@ -634,6 +701,121 @@ def quant_awq(
         console.print("[green]AWQ export complete[/green]")
         console.print(f"  Output: {info['output_path']}")
         console.print(f"  Bits:   {bits}-bit  group={group_size}")
+
+
+# ---------------------------------------------------------------------------
+# Promote subapp — revocation check
+# ---------------------------------------------------------------------------
+
+promote_app = typer.Typer(help="Promotion and revocation commands.", no_args_is_help=True)
+app.add_typer(promote_app, name="promote-sub")
+
+
+@promote_app.command("revoke")
+def promote_revoke(
+    passport_id: str = typer.Option(..., "--passport-id", help="Constitutional passport ID to check for revocation"),
+    revocation_url: str = typer.Option("http://127.0.0.1:8002/v1/passport/revoke", "--revocation-url", help="Revocation endpoint URL"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Check whether a constitutional passport has been revoked.
+
+    Returns exit code 0 if the passport is valid (not revoked),
+    or exit code 1 if it is revoked.
+    """
+    from dojo.core.evidence import EvidenceLogger
+    from dojo.core.exceptions import PassportRevoked
+
+    logger = EvidenceLogger.get_instance()
+
+    # Emit evidence for the revocation check CLI invocation
+    logger.emit(
+        {
+            "type": "promote.revoke_check",
+            "data": {
+                "passport_id": passport_id,
+                "revocation_url": revocation_url,
+            },
+        },
+        organ="promote",
+    )
+
+    # Attempt the actual HTTP revocation check
+    from datetime import datetime, timezone as _tz, timedelta
+    from dojo.core.types import ConstitutionalPassport
+    from dojo.promote.revocation import check_revocation
+
+    passport = ConstitutionalPassport(
+        passport_id=passport_id,
+        model_artifact_id="cli_check",
+        harvest_receipt_id="cli_check",
+        harvest_check_receipt=b"",
+        dojo_check_receipt=b"",
+        forge_check_receipt=b"",
+        merkle_root="0" * 64,
+        issued_at=datetime.now(_tz.utc),
+        expires_at=datetime.now(_tz.utc) + timedelta(days=90),
+        revocation_url=revocation_url,
+    )
+
+    try:
+        check_revocation(passport)
+        # Not revoked
+        if json_out:
+            typer.echo(json.dumps({"passport_id": passport_id, "revoked": False}, indent=2))
+        else:
+            console.print(f"[green]Passport {passport_id!r} is VALID[/green] (not revoked)")
+        raise typer.Exit(code=0)
+    except PassportRevoked:
+        if json_out:
+            typer.echo(json.dumps({"passport_id": passport_id, "revoked": True}, indent=2))
+        else:
+            console.print(f"[red]Passport {passport_id!r} is REVOKED[/red]")
+        raise typer.Exit(code=1)
+
+
+# ---------------------------------------------------------------------------
+# HAL subapp — hardware detection
+# ---------------------------------------------------------------------------
+
+hal_app = typer.Typer(help="Hardware abstraction layer commands.", no_args_is_help=True)
+app.add_typer(hal_app, name="hal")
+
+
+@hal_app.command("detect")
+def hal_detect(
+    json_out: bool = typer.Option(True, "--json/--no-json", help="Output as JSON (default: JSON)"),
+) -> None:
+    """Detect hardware and emit a signed HALProfile as JSON.
+
+    Calls the top-level HAL detector and prints JSON output.
+    Emits hal.detect_cli evidence.
+    """
+    from dojo.core.evidence import EvidenceLogger
+    from dojo.hal.detector import detect as _detect
+
+    profile = _detect()
+
+    EvidenceLogger.get_instance().emit(
+        {
+            "type": "hal.detect_cli",
+            "data": {
+                "tier": profile.tier.value,
+                "gpu_name": profile.gpu_name,
+                "compute_capability": profile.compute_capability,
+                "profile_sha256": profile.profile_sha256,
+            },
+        },
+        organ="hal",
+    )
+
+    d = profile.to_dict()
+    if json_out:
+        typer.echo(json.dumps(d, indent=2))
+    else:
+        console.print(f"[bold green]HAL Detect[/bold green]")
+        console.print(f"  Tier:  {d['tier']}")
+        console.print(f"  GPU:   {d['gpu_name']}")
+        console.print(f"  VRAM:  {profile.vram_gb:.1f} GB")
 
 
 # ---------------------------------------------------------------------------

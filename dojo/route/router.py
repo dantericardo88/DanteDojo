@@ -7,6 +7,7 @@ privacy tiers, and records cost receipts.
 from __future__ import annotations
 
 import os
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Optional
 
@@ -33,6 +34,18 @@ _DEAD_PROVIDERS: set[str] = set()
 # to _DEAD_PROVIDERS and the counter resets.
 _circuit_breaker: dict[str, int] = {}
 _CIRCUIT_BREAKER_THRESHOLD = 3
+
+# Half-open state: providers that are in a trial/probe state after being dead.
+# A provider in _HALF_OPEN_PROVIDERS is allowed ONE test call. If it succeeds,
+# the provider is restored; if it fails, it goes back to dead.
+_HALF_OPEN_PROVIDERS: set[str] = set()
+
+# Latency-based circuit breaker: tracks recent call latencies per provider.
+# If the last _LATENCY_BREAKER_WINDOW consecutive calls each exceed
+# _LATENCY_BREAKER_THRESHOLD_MS milliseconds, the provider is tripped.
+_latency_window: dict[str, deque] = {}
+_LATENCY_BREAKER_THRESHOLD_MS: float = 5000.0   # ms before a call is "slow"
+_LATENCY_BREAKER_WINDOW: int = 3                 # consecutive slow calls to trip
 
 # Route options that require external API access
 _EXTERNAL_API_OPTIONS: frozenset[RoutingOption] = frozenset({
@@ -76,19 +89,97 @@ def _health_check_with_timeout(endpoint: str, timeout: float = 3.0) -> bool:
 
 
 def _record_provider_failure(option: RoutingOption) -> None:
-    """Increment failure count for *option*; mark dead after threshold."""
+    """Increment failure count for *option*; mark dead after threshold.
+
+    Emits ``route.circuit_trip`` evidence when the breaker trips.
+    """
     key = option.value
     _circuit_breaker[key] = _circuit_breaker.get(key, 0) + 1
     if _circuit_breaker[key] >= _CIRCUIT_BREAKER_THRESHOLD:
         _DEAD_PROVIDERS.add(key)
+        _HALF_OPEN_PROVIDERS.discard(key)
         _circuit_breaker[key] = 0
+        EvidenceLogger.get_instance().emit(
+            {
+                "type": "route.circuit_trip",
+                "data": {
+                    "provider": key,
+                    "threshold": _CIRCUIT_BREAKER_THRESHOLD,
+                    "reason": "consecutive_failures",
+                },
+            },
+            organ="route",
+        )
 
 
 def _record_provider_success(option: RoutingOption) -> None:
-    """Reset circuit-breaker counter on success; remove from dead set."""
+    """Reset circuit-breaker counter on success; remove from dead/half-open set.
+
+    Emits ``route.circuit_reset`` evidence when a tripped or half-open breaker recovers.
+    """
     key = option.value
+    was_tripped = key in _DEAD_PROVIDERS or key in _HALF_OPEN_PROVIDERS
     _circuit_breaker[key] = 0
     _DEAD_PROVIDERS.discard(key)
+    _HALF_OPEN_PROVIDERS.discard(key)
+    # Also clear any latency window so slow-call history doesn't linger
+    if key in _latency_window:
+        _latency_window[key].clear()
+    if was_tripped:
+        EvidenceLogger.get_instance().emit(
+            {
+                "type": "route.circuit_reset",
+                "data": {"provider": key},
+            },
+            organ="route",
+        )
+
+
+def _record_provider_latency(option: RoutingOption, latency_ms: float) -> None:
+    """Record a call latency for *option*.
+
+    If the last _LATENCY_BREAKER_WINDOW consecutive calls all exceeded
+    _LATENCY_BREAKER_THRESHOLD_MS, the provider is tripped as dead.
+    """
+    key = option.value
+    if key not in _latency_window:
+        _latency_window[key] = deque(maxlen=_LATENCY_BREAKER_WINDOW)
+    _latency_window[key].append(latency_ms)
+
+    window = _latency_window[key]
+    if (
+        len(window) >= _LATENCY_BREAKER_WINDOW
+        and all(ms > _LATENCY_BREAKER_THRESHOLD_MS for ms in window)
+    ):
+        _DEAD_PROVIDERS.add(key)
+        _latency_window[key].clear()
+        EvidenceLogger.get_instance().emit(
+            {
+                "type": "route.circuit_trip",
+                "data": {
+                    "provider": key,
+                    "threshold": _CIRCUIT_BREAKER_THRESHOLD,
+                    "reason": "consecutive_high_latency",
+                    "latency_ms": latency_ms,
+                    "window": _LATENCY_BREAKER_WINDOW,
+                    "threshold_ms": _LATENCY_BREAKER_THRESHOLD_MS,
+                },
+            },
+            organ="route",
+        )
+
+
+def _enter_half_open(option: RoutingOption) -> None:
+    """Move a dead provider into half-open state (one probe call allowed)."""
+    key = option.value
+    if key in _DEAD_PROVIDERS:
+        _DEAD_PROVIDERS.discard(key)
+        _HALF_OPEN_PROVIDERS.add(key)
+
+
+def _is_half_open(option: RoutingOption) -> bool:
+    """Return True if the provider is currently in half-open state."""
+    return option.value in _HALF_OPEN_PROVIDERS
 
 
 def _is_provider_alive(option: RoutingOption) -> bool:
@@ -198,6 +289,19 @@ def dispatch(
                     },
                     organ="route",
                 )
+                # Emit per-hop fallback evidence (multi-hop tracking)
+                logger.emit(
+                    {
+                        "type": "route.fallback_hop",
+                        "data": {
+                            "task": task,
+                            "failed_provider": option.value,
+                            "hop": len(dead_providers_skipped),
+                            "reason": why,
+                        },
+                    },
+                    organ="route",
+                )
             continue
 
         chosen = option
@@ -205,6 +309,18 @@ def dispatch(
         break
 
     if chosen is None:
+        # Emit route.exhausted evidence before raising
+        logger.emit(
+            {
+                "type": "route.exhausted",
+                "data": {
+                    "task": task,
+                    "failed_providers": dead_providers_skipped,
+                    "preference_order": [o.value for o in policy.preference_order],
+                },
+            },
+            organ="route",
+        )
         # If we skipped dead providers and no local option was available, raise
         # a more specific RoutingProviderUnavailable rather than NoRouteAvailable.
         if dead_providers_skipped:
@@ -353,9 +469,16 @@ def _build_receipt(task: str, option: RoutingOption, input_text: str) -> CostRec
 __all__ = [
     "dispatch",
     "_DEAD_PROVIDERS",
+    "_HALF_OPEN_PROVIDERS",
     "_circuit_breaker",
+    "_latency_window",
     "_CIRCUIT_BREAKER_THRESHOLD",
+    "_LATENCY_BREAKER_THRESHOLD_MS",
+    "_LATENCY_BREAKER_WINDOW",
     "_record_provider_failure",
     "_record_provider_success",
+    "_record_provider_latency",
+    "_enter_half_open",
+    "_is_half_open",
     "_health_check_with_timeout",
 ]

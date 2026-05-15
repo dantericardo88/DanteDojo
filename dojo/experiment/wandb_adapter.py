@@ -281,6 +281,19 @@ class WandBTrainingCallback:
             metrics: Metrics to log at this step.
         """
         self._adapter.log(metrics, step=step)
+        # Emit dedicated wandb_step evidence for constitutional traceability
+        EvidenceLogger.get_instance().emit(
+            {
+                "type": "experiment.wandb_step",
+                "data": {
+                    "run_id": self._adapter._active_run_id or "",
+                    "step": step,
+                    "metrics": dict(metrics),
+                    "event": "on_step",
+                },
+            },
+            organ="experiment",
+        )
 
     def on_epoch_end(self, epoch: int, metrics: Dict[str, float]) -> None:
         """Called at the end of each epoch.
@@ -295,6 +308,19 @@ class WandBTrainingCallback:
         self._adapter.log(
             {f"epoch_{k}": v for k, v in metrics.items()},
             step=epoch,
+        )
+        # Emit dedicated wandb_step evidence for constitutional traceability
+        EvidenceLogger.get_instance().emit(
+            {
+                "type": "experiment.wandb_step",
+                "data": {
+                    "run_id": self._adapter._active_run_id or "",
+                    "epoch": epoch,
+                    "metrics": {f"epoch_{k}": v for k, v in metrics.items()},
+                    "event": "on_epoch_end",
+                },
+            },
+            organ="experiment",
         )
 
     def on_train_end(self, final_metrics: Dict[str, float]) -> None:

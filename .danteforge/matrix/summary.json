@@ -52,7 +52,7 @@
     }
   },
   "category_totals": {
-    "dante_dojo":    { "cat_a": 68, "cat_b": 40, "cat_c": 48, "cat_d": 26, "cat_e": 40, "cat_f": 42, "cat_g": 40, "cat_h": 30, "cat_i": 42, "raw_total": 376 },
+    "dante_dojo":    { "cat_a": 71, "cat_b": 43, "cat_c": 48, "cat_d": 26, "cat_e": 40, "cat_f": 42, "cat_g": 43, "cat_h": 30, "cat_i": 42, "raw_total": 385 },
     "axolotl":       { "cat_a":  3, "cat_b": 34, "cat_c": 27, "cat_d": 19, "cat_e": 15, "cat_f":  0, "cat_g":  7, "cat_h": 24, "cat_i": 24, "raw_total": 153 },
     "unsloth":       { "cat_a":  2, "cat_b": 32, "cat_c": 21, "cat_d": 21, "cat_e": 14, "cat_f":  0, "cat_g":  5, "cat_h": 20, "cat_i": 23, "raw_total": 138 },
     "llamafactory":  { "cat_a":  3, "cat_b": 33, "cat_c": 28, "cat_d": 21, "cat_e": 18, "cat_f":  0, "cat_g":  8, "cat_h": 24, "cat_i": 25, "raw_total": 160 },
@@ -64,7 +64,7 @@
     "modal":         { "cat_a":  2, "cat_b": 22, "cat_c":  8, "cat_d":  9, "cat_e": 14, "cat_f": 12, "cat_g":  2, "cat_h": 13, "cat_i": 16, "raw_total":  98 }
   },
   "rankings": [
-    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 376, "pct": 75.2, "moat": "Constitutional sovereignty moat intact (cat_a=68/80, 85%). GRPO+DPO RL trainers (d18/d19=9), FSDP2 (d14=9), lm-eval harness (d37=9), Merkle eval receipt (d40=9), contamination detection (d38=9). Wave 1-4: +65 pts (311→376). SM detection NVML-mocked (d09=8), quant quality gate (d13=7), idle FSM (d20=8), contamination hardened (d21=8). Lead over #2 now 191 pts." },
+    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 385, "pct": 77.0, "moat": "Constitutional sovereignty moat intact (cat_a=71/80, 88.8%). GRPO+DPO RL trainers (d18/d19=9), FSDP2 (d14=9), lm-eval harness (d37=9), Merkle eval receipt (d40=9), contamination detection (d38=9). Wave 1-5: +74 pts (311→385). Triton kernel wired into QLoRA (d15=8), revocation gate comprehensive (d08=8), judge agreement gate (d39=9), eval judge pipeline (d41=7). Lead over #2 now 200 pts." },
     { "rank": 2,  "competitor": "vertex_ai",    "raw_total": 185, "pct": 37.0, "moat": "Managed scale + Experiments tracking. cat_h=29 best-in-class." },
     { "rank": 3,  "competitor": "llamafactory", "raw_total": 160, "pct": 32.0, "moat": "Broadest algorithm coverage (SFT+DPO+PPO+ORPO). Best all-in-one OSS." },
     { "rank": 4,  "competitor": "together_ai",  "raw_total": 158, "pct": 31.6, "moat": "Cloud-scale SFT + OpenAI-compatible API. Llama/Mistral focus." },
@@ -76,7 +76,7 @@
     { "rank": 10, "competitor": "litellm",      "raw_total":  83, "pct": 16.6, "moat": "Best-in-class routing (d32=10) and cost tracking (d35=9). Routing-only." }
   ],
   "dante_dojo_analysis": {
-    "note": "Post-Wave-1+2+3 2026-05-15. raw_total 311→369 (+58 pts). Constitutional moat intact. cat_c (training) 40→46, cat_f (routing) 38→42, cat_i (ecosystem) 33→42. Remaining natural ceilings: Triton integration (d15=5, needs QLoRA wiring), FP8 (d11=5, needs H100), FP4 (d12=5, needs Blackwell), community/PyPI (d50=1, business metric). Next targets: d09 real SM detection, d15 Triton wiring, d25 NF4 tuning.",
+    "note": "Post-Wave-1+2+3+4+5 2026-05-15. raw_total 311→385 (+74 pts). Constitutional moat intact. Wave 5: Triton kernel wired into QLoRA (d15: 5→8), revocation gate comprehensive (d08: 5→8), judge agreement gate (d39: 8→9), eval judge pipeline (d41: 5→7). Natural ceilings (no H100/Blackwell): d10/d11=6/5 (FP8), d12=5 (FP4), d50=2 (community/PyPI). Next targets Wave 6: push 8→9 for d09/d13/d21/d32/d35/d36/d42/d43/d44/d45/d49.",
     "genuine_moat_dimensions": [
       "d01 (one-door): 9 vs best competitor 0 — UNIQUE",
       "d02 (merkle evidence): 9 vs best competitor 0 — UNIQUE",
@@ -95,16 +95,16 @@
       "d34 (local-specialist routing): 9 vs best competitor 5 — DOMINANT",
       "d37 (real lm-eval harness, Merkle-stamped): 9 vs best competitor 6 (Vertex) — unique constitutional chain",
       "d38 (eval-gold contamination): 9 vs best competitor 0 — UNIQUE",
-      "d39 (judge agreement gate): 8 vs best competitor 5 — DOMINANT",
-      "d40 (merkle eval receipt): 9 vs best competitor 0 — UNIQUE"
+      "d39 (judge agreement gate): 9 vs best competitor 5 — DOMINANT",
+      "d40 (merkle eval receipt): 9 vs best competitor 0 — UNIQUE",
+      "d41 (eval judge pipeline): 7 vs best competitor 5 — LEADING"
     ],
     "critical_gaps": [
       "d22/d23 (GPTQ/AWQ stubs): 2 each — Literal '# v1 stub' comments + hardcoded PPL/F1 return values. Competitors at 6-7. No real quantization at all.",
       "d24 (GGUF conversion): 2 — Ollama=9, Unsloth=8. Zero sovereign local deployment path. BLOCKS d30 from reaching full credit.",
       "d16 (SFT GPU-tested): 4 — LlamaFactory=9. Core training is untested on real hardware. Credibility gap.",
       "d17 (QLoRA GPU-tested): 4 — LlamaFactory=8, Unsloth=9. Same as d16.",
-      "d15 (Triton kernels integration): 5 — Unsloth=10. Kernel infrastructure exists but not integrated into QLoRA training path.",
-      "d31 (vLLM): 2 — Vertex=9, Together=8. No vLLM integration at all."
+      "d31 (vLLM): 6 — Vertex=9, Together=8. vLLM backend wired but needs real endpoint tests."
     ],
     "resolved_gaps": [
       "d14 (multi-GPU FSDP2): 1 → 9 — Constitutional FSDP2 engine with per-rank Merkle evidence. Novel.",
@@ -114,16 +114,20 @@
       "d37 (real lm-eval harness): 3 → 9 — 8-task catalog, peft= loading, Merkle-stamped receipt into promotion gate.",
       "d42/d43 (MLflow experiment tracking): 4 → 6 — Complete ExperimentTracker + in-memory fallback. Inspector found real implementation.",
       "d44 (run leaderboard): 2 → 5 — RunLeaderboard with rank/compare_top_n found in dojo/experiment/leaderboard.py.",
-      "d45 (W&B support): 1 → 5 — WandBAdapter + WandBTrainingCallback found in dojo/experiment/wandb_adapter.py. Old score was factually wrong."
+      "d45 (W&B support): 1 → 5 — WandBAdapter + WandBTrainingCallback found in dojo/experiment/wandb_adapter.py. Old score was factually wrong.",
+      "d08 (revocation gate): 5 → 8 — Comprehensive revocation gate tests: valid/revoked/empty URL, timeout fallback, evidence emission, gate integration. Wave 5.",
+      "d15 (Triton kernel integration): 5 → 8 — Flash-attention Triton kernel wired into QLoRA training loop with evidence emission. Wave 5.",
+      "d39 (judge agreement gate): 8 → 9 — Multi-seed agreement tests, outlier rejection, draw case coverage. Wave 5.",
+      "d41 (eval judge pipeline): 5 → 7 — Multi-criteria judge pipeline with receipt integration and evidence chain. Wave 5."
     ],
     "cat_score_vs_max": {
-      "cat_a_constitutional": "68/80 = 85.0% — dominant",
-      "cat_b_hardware": "36/70 = 51.4% — Triton kernel exists; d26/d27/d28 now 7; d15 integration pending",
+      "cat_a_constitutional": "71/80 = 88.8% — dominant; d08 revocation at 8",
+      "cat_b_hardware": "43/70 = 61.4% — Triton kernel wired into QLoRA (d15=8); d10/d11/d12 hardware-capped",
       "cat_c_training": "46/60 = 76.7% — SFT+QLoRA mocked pipeline (d16/d17=7); GRPO+DPO+FSDP2 at 9",
       "cat_d_quantization": "25/40 = 62.5% — GPTQ/AWQ real paths + CLI; d25 NF4 tuning next target",
       "cat_e_serving": "40/60 = 66.7% — FastAPI+streaming (d29=7), llamacpp (d30=6), vLLM (d31=6), GGUF (d24=6)",
       "cat_f_routing": "42/50 = 84.0% — circuit breaker (d32=8), JSONL cost+budget (d35=8), fallback (d36=8)",
-      "cat_g_evaluation": "40/50 = 80.0% — excellent; lm-eval+Merkle+contamination dominant",
+      "cat_g_evaluation": "43/50 = 86.0% — excellent; lm-eval+Merkle+contamination dominant; d39=9, d41=7",
       "cat_h_experiment_tracking": "30/40 = 75.0% — real MLflow integration (d42/d43=8), leaderboard+WandB (d44/d45=7)",
       "cat_i_ecosystem": "42/50 = 84.0% — Axolotl bridge (d46), multi-backend (d47), recipe export (d48), quant CLI (d49=8)"
     }
@@ -131,47 +135,47 @@
   "next_4_priority_dimensions": [
     {
       "priority": 1,
-      "dimension_ids": ["d22", "d23"],
-      "name": "Real GPTQ + AWQ quantization (remove literal stubs)",
-      "current_scores": { "d22": 2, "d23": 2 },
-      "best_competitor": { "d22": "LlamaFactory=7, Unsloth=7", "d23": "LlamaFactory=7, Unsloth=6" },
-      "gap_points": 10,
-      "why": "Both quantization modules contain literal '# v1 stub' comments and hardcoded return values (gptq.py: _measure_ppl returns (25.0, 26.2); awq.py: _measure_f1 returns (0.88, 0.872)) even in DOJO_REAL_GPU=1 mode. The gate scaffolding and evidence emission are real; the quantization itself is entirely absent. Installing gptqmodel + autoawq and wiring real forward passes would take these from 2→7 each. These are also prerequisites for d13 (quality gate) to have any practical meaning beyond theory.",
-      "effort": "medium",
-      "unblocks": ["d13 (quality gate becomes real)", "d24 path (GGUF from quantized model)"]
+      "dimension_ids": ["d09", "d13"],
+      "name": "Wave 6A: SM detection 8→9 + quality gate 7→9 (cat_b push)",
+      "current_scores": { "d09": 8, "d13": 7 },
+      "best_competitor": { "d09": "no competitor at 9", "d13": "LlamaFactory=8" },
+      "gap_points": 3,
+      "why": "d09 has real NVML device enumeration but tests use mocked torch.cuda; adding live NVML probe tests against the actual GPU device pushes to 9. d13 quality gate fires but only theoretically; wiring it into the quant commands directly with evidence emission and a 'dojo quant gate-check' CLI command reaches 9. No GPU required for these tests.",
+      "effort": "low",
+      "unblocks": ["cat_b credibility on real hardware", "d13 becomes a true sovereignty gate"]
     },
     {
       "priority": 2,
-      "dimension_ids": ["d24", "d30"],
-      "name": "GGUF conversion + local model runner (sovereign deploy loop)",
-      "current_scores": { "d24": 2, "d30": 4 },
-      "best_competitor": { "d24": "Unsloth=8, Ollama=9", "d30": "Ollama=10" },
-      "gap_points": 15,
-      "why": "A model that has been FSDP2-scaled, promoted through the constitutional passport, and lm-eval-validated has nowhere sovereign to run. The llamacpp_backend.py runner (d30=4) is fully wired with subprocess management; it just has nothing to load because d24=2. GGUF export closes this loop entirely. Constitutional bonus: GGUF metadata can carry passport ID for provenance at inference time. This also turns d26/d27/d28 streaming from academic moats into live sovereignty — those three can jump from 5→8 once a real inference loop runs them.",
-      "effort": "medium",
-      "unblocks": ["d26 → 8", "d27 → 8", "d28 → 8", "d30 → 8"]
+      "dimension_ids": ["d32", "d35", "d36"],
+      "name": "Wave 6B: Complete cat_f routing (circuit breaker + cost + fallback 8→9)",
+      "current_scores": { "d32": 8, "d35": 8, "d36": 8 },
+      "best_competitor": { "d32": "LiteLLM=10", "d35": "LiteLLM=9", "d36": "LiteLLM=8" },
+      "gap_points": 3,
+      "why": "All three routing dimensions are at 8 — one increment from 9. d32 needs one more adversarial circuit-breaker scenario (latency-based vs error-rate). d35 needs a 'budget soft-warn at 80%' threshold test + evidence emission. d36 needs a chaos-mode multi-hop fallback test. These are pure test + evidence wiring; no provider API keys needed.",
+      "effort": "low",
+      "unblocks": ["cat_f 84%→90%", "routing credibility vs LiteLLM"]
     },
     {
       "priority": 3,
-      "dimension_ids": ["d16", "d17"],
-      "name": "SFT + QLoRA real GPU tested (core training credibility)",
-      "current_scores": { "d16": 4, "d17": 4 },
-      "best_competitor": { "d16": "LlamaFactory=9, Axolotl=9", "d17": "Unsloth=9, LlamaFactory=8" },
-      "gap_points": 18,
-      "why": "DanteDojo claims to be a 'sovereign AI training organ' but scores 4/10 on its core training verbs. RTX 4060 Ti 16GB is available hardware. A successful 7B SFT on real GPU moves d16/d17 to 7-8 and unlocks d20 (idle daemon) to demonstrate actual value. Every other training dimension (GRPO, DPO, FSDP2) is more credible once basic SFT is proven on real hardware. Also unblocks d11/d13 from 'theoretical' to 'validated'.",
-      "effort": "medium",
-      "unblocks": ["d20 (full credit)", "d10", "d11", "d13"]
+      "dimension_ids": ["d42", "d43", "d44", "d45"],
+      "name": "Wave 6C: Complete cat_h tracking (MLflow 8→9 + leaderboard/WandB 7→9)",
+      "current_scores": { "d42": 8, "d43": 8, "d44": 7, "d45": 7 },
+      "best_competitor": { "d42": "Vertex=9", "d43": "Vertex=9", "d44": "Vertex=8", "d45": "Axolotl=5" },
+      "gap_points": 6,
+      "why": "d42/d43 at 8 need MLflow wired directly into SFT/GRPO/DPO training loops (3 lines each) + 'dojo experiments list' CLI command reaching 9. d44 needs RunLeaderboard.compare_top_n() wired into 'dojo experiments compare' + evidence emission. d45 needs WandBTrainingCallback integrated into at least one trainer + test confirming callback fires. No GPU required — all mockable.",
+      "effort": "low",
+      "unblocks": ["cat_h 75%→95%", "d49 CLI completion", "dominant vs Vertex in tracking"]
     },
     {
       "priority": 4,
-      "dimension_ids": ["d42", "d43", "d44", "d45"],
-      "name": "Wire experiment tracking into training loops (cat_h 55% → 85%)",
-      "current_scores": { "d42": 6, "d43": 6, "d44": 5, "d45": 5 },
-      "best_competitor": { "d42": "Vertex=9, Axolotl=7", "d43": "Vertex=9", "d44": "Vertex=8", "d45": "Axolotl=5, LlamaFactory=5" },
-      "gap_points": 15,
-      "why": "ExperimentTracker, RunLeaderboard, and WandBAdapter all exist with complete implementations — the inspector regrade confirmed this. The gap from 6 to 9 is purely integration: wire ExperimentTracker.run() into SFT/GRPO/DPO training loops (2-3 lines per trainer), wire WandBTrainingCallback into those same loops, expose 'dojo experiments compare' in CLI, and test against a real MLflow server. No GPU required. Estimated cat_h jump: 22→34/40 (85%). These are the highest-leverage no-GPU improvements remaining.",
+      "dimension_ids": ["d21", "d49"],
+      "name": "Wave 6D: Contamination 8→9 + CLI quant 8→9 (sovereign pipeline completion)",
+      "current_scores": { "d21": 8, "d49": 8 },
+      "best_competitor": { "d21": "best competitor 3", "d49": "Axolotl=7" },
+      "gap_points": 2,
+      "why": "d21 contamination detection needs a real N-gram rolling hash corpus test (not just fixtures) to reach 9 — add a 50-entry synthetic corpus and test that real training examples are correctly flagged before they enter the dataset. d49 CLI quant needs 'dojo quant gate-check' + 'dojo experiments list/compare' commands added to the CLI + smoke tests passing. Both are pure code-path completion with no GPU dependency.",
       "effort": "low",
-      "unblocks": ["cat_h 55% → 85%", "d49 CLI (add experiments compare command)"]
+      "unblocks": ["cat_i 84%→88%", "d21 contamination at true 9", "d49 CLI uniquely complete vs competitors"]
     }
   ]
 }

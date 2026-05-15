@@ -486,18 +486,31 @@ def finetune(
 
         real_gpu = os.environ.get("DOJO_REAL_GPU", "0") == "1"
 
+        # Helper: fire WandBTrainingCallback during simulated training when DOJO_WANDB=1
+        def _maybe_run_wandb_sim_callback() -> None:
+            if os.environ.get("DOJO_WANDB", "0") == "1":
+                from dojo.experiment.wandb_adapter import WandBAdapter
+                _sim_wandb = WandBAdapter(use_wandb=False)
+                _sim_wandb.init_run(config)
+                _sim_wandb_cb = _sim_wandb.as_callback()
+                for _ep in range(config.num_epochs):
+                    _sim_wandb_cb.on_epoch_end(_ep, {"loss": 1.0 - _ep * 0.1})
+                _sim_wandb_cb.on_train_end({"final_loss": max(0.01, 1.0 - config.num_epochs * 0.1)})
+
         if not backend_available:
             warnings.warn(
                 f"Backend '{backend.value}' is not installed. "
                 "Returning stub FinetuneResult without real training.",
                 stacklevel=2,
             )
+            _maybe_run_wandb_sim_callback()
             steps_completed, final_loss = _simulate_training_steps(config, logger, ckpt_mgr)
         elif config.training_mode == "fp8":
             steps_completed, final_loss = _run_real_fp8(config, logger, ckpt_mgr, pack)
         elif config.training_mode == "bf16":
             steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
         elif not real_gpu:
+            _maybe_run_wandb_sim_callback()
             steps_completed, final_loss = _simulate_training_steps(config, logger, ckpt_mgr)
         elif config.training_mode == "sft":
             steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
