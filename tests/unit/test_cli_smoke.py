@@ -330,3 +330,189 @@ class TestAdditionalCoverage:
         assert out.exists()
         data = json.loads(out.read_text())
         assert "merkle_root" in data or "events" in data
+
+
+# ---------------------------------------------------------------------------
+# 7. Quantization CLI smoke tests (8 tests)
+# ---------------------------------------------------------------------------
+
+class TestQuantCommands:
+    """Smoke tests for dojo quant gguf/gptq/awq CLI commands."""
+
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _make_model_dir(tmp_path: Path) -> Path:
+        """Create a minimal fake model directory so Path(model_path).name works."""
+        model_dir = tmp_path / "fake-model"
+        model_dir.mkdir()
+        # Write a minimal config so the directory is non-empty
+        (model_dir / "config.json").write_text('{"model_type": "gpt2"}')
+        return model_dir
+
+    @staticmethod
+    def _gguf_env():
+        """Return env vars that put export_gguf into stub mode."""
+        return {"DOJO_GGUF_STUB": "1", "DOJO_REAL_GPU": "0"}
+
+    @staticmethod
+    def _gpu_stub_env():
+        """Return env vars that put gptq/awq into stub mode."""
+        return {"DOJO_REAL_GPU": "0"}
+
+    # ------------------------------------------------------------------
+    # GGUF tests
+    # ------------------------------------------------------------------
+
+    def test_gguf_exits_zero_stub_mode(self, tmp_path):
+        """dojo quant gguf exits 0 in stub mode (DOJO_GGUF_STUB=1)."""
+        model_dir = self._make_model_dir(tmp_path)
+        out_dir = tmp_path / "gguf_out"
+
+        import sys
+        # Stub llama_cpp so _find_convert_script's import probe doesn't error
+        with patch.dict("os.environ", self._gguf_env()), \
+             patch.dict(sys.modules, {"llama_cpp": None}):
+            result = runner.invoke(app, [
+                "quant", "gguf", str(model_dir),
+                "--output-dir", str(out_dir),
+            ])
+        assert result.exit_code == 0, f"exit={result.exit_code}\n{result.output}"
+
+    def test_gguf_json_output_contains_output_path(self, tmp_path):
+        """dojo quant gguf --json output contains 'output_path' key."""
+        model_dir = self._make_model_dir(tmp_path)
+        out_dir = tmp_path / "gguf_out"
+
+        import sys
+        with patch.dict("os.environ", self._gguf_env()), \
+             patch.dict(sys.modules, {"llama_cpp": None}):
+            result = runner.invoke(app, [
+                "quant", "gguf", str(model_dir),
+                "--output-dir", str(out_dir),
+                "--json",
+            ])
+        assert result.exit_code == 0, f"exit={result.exit_code}\n{result.output}"
+        parsed = json.loads(result.output)
+        assert "output_path" in parsed
+
+    def test_gguf_quant_type_q5_k_m_in_filename(self, tmp_path):
+        """dojo quant gguf --quant-type Q5_K_M uses Q5_K_M in the output filename."""
+        model_dir = self._make_model_dir(tmp_path)
+        out_dir = tmp_path / "gguf_out"
+
+        import sys
+        with patch.dict("os.environ", self._gguf_env()), \
+             patch.dict(sys.modules, {"llama_cpp": None}):
+            result = runner.invoke(app, [
+                "quant", "gguf", str(model_dir),
+                "--output-dir", str(out_dir),
+                "--quant-type", "Q5_K_M",
+                "--json",
+            ])
+        assert result.exit_code == 0, f"exit={result.exit_code}\n{result.output}"
+        parsed = json.loads(result.output)
+        assert "Q5_K_M" in parsed["output_path"]
+
+    def test_gguf_passport_id_creates_sidecar(self, tmp_path):
+        """dojo quant gguf --passport-id pp-test-001 creates a .meta.json sidecar."""
+        model_dir = self._make_model_dir(tmp_path)
+        out_dir = tmp_path / "gguf_out"
+
+        import sys
+        with patch.dict("os.environ", self._gguf_env()), \
+             patch.dict(sys.modules, {"llama_cpp": None}):
+            result = runner.invoke(app, [
+                "quant", "gguf", str(model_dir),
+                "--output-dir", str(out_dir),
+                "--passport-id", "pp-test-001",
+                "--json",
+            ])
+        assert result.exit_code == 0, f"exit={result.exit_code}\n{result.output}"
+        parsed = json.loads(result.output)
+        # sidecar field should be non-null when passport_id is set
+        assert parsed.get("sidecar") is not None
+        sidecar_path = Path(parsed["sidecar"])
+        assert sidecar_path.exists(), f"Sidecar not found: {sidecar_path}"
+        sidecar_data = json.loads(sidecar_path.read_text())
+        assert sidecar_data.get("dojo.passport_id") == "pp-test-001"
+
+    # ------------------------------------------------------------------
+    # GPTQ tests
+    # ------------------------------------------------------------------
+
+    def test_gptq_exits_zero_stub_mode(self, tmp_path):
+        """dojo quant gptq exits 0 in stub mode (DOJO_REAL_GPU=0)."""
+        model_dir = self._make_model_dir(tmp_path)
+        out_dir = tmp_path / "gptq_out"
+
+        import sys
+        import types
+        fake_gptqmodel = types.ModuleType("gptqmodel")
+        with patch.dict("os.environ", self._gpu_stub_env()), \
+             patch.dict(sys.modules, {"gptqmodel": fake_gptqmodel}):
+            result = runner.invoke(app, [
+                "quant", "gptq", str(model_dir),
+                "--output-dir", str(out_dir),
+            ])
+        assert result.exit_code == 0, f"exit={result.exit_code}\n{result.output}"
+
+    def test_gptq_json_output_contains_output_path(self, tmp_path):
+        """dojo quant gptq --json output contains 'output_path' key."""
+        model_dir = self._make_model_dir(tmp_path)
+        out_dir = tmp_path / "gptq_out"
+
+        import sys
+        import types
+        fake_gptqmodel = types.ModuleType("gptqmodel")
+        with patch.dict("os.environ", self._gpu_stub_env()), \
+             patch.dict(sys.modules, {"gptqmodel": fake_gptqmodel}):
+            result = runner.invoke(app, [
+                "quant", "gptq", str(model_dir),
+                "--output-dir", str(out_dir),
+                "--json",
+            ])
+        assert result.exit_code == 0, f"exit={result.exit_code}\n{result.output}"
+        parsed = json.loads(result.output)
+        assert "output_path" in parsed
+
+    # ------------------------------------------------------------------
+    # AWQ tests
+    # ------------------------------------------------------------------
+
+    def test_awq_exits_zero_stub_mode(self, tmp_path):
+        """dojo quant awq exits 0 in stub mode (DOJO_REAL_GPU=0)."""
+        model_dir = self._make_model_dir(tmp_path)
+        out_dir = tmp_path / "awq_out"
+
+        import sys
+        import types
+        fake_awq = types.ModuleType("awq")
+        with patch.dict("os.environ", self._gpu_stub_env()), \
+             patch.dict(sys.modules, {"awq": fake_awq}):
+            result = runner.invoke(app, [
+                "quant", "awq", str(model_dir),
+                "--output-dir", str(out_dir),
+            ])
+        assert result.exit_code == 0, f"exit={result.exit_code}\n{result.output}"
+
+    def test_awq_json_output_contains_output_path(self, tmp_path):
+        """dojo quant awq --json output contains 'output_path' key."""
+        model_dir = self._make_model_dir(tmp_path)
+        out_dir = tmp_path / "awq_out"
+
+        import sys
+        import types
+        fake_awq = types.ModuleType("awq")
+        with patch.dict("os.environ", self._gpu_stub_env()), \
+             patch.dict(sys.modules, {"awq": fake_awq}):
+            result = runner.invoke(app, [
+                "quant", "awq", str(model_dir),
+                "--output-dir", str(out_dir),
+                "--json",
+            ])
+        assert result.exit_code == 0, f"exit={result.exit_code}\n{result.output}"
+        parsed = json.loads(result.output)
+        assert "output_path" in parsed

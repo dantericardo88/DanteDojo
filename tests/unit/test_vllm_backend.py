@@ -211,3 +211,163 @@ class TestEndpointUrl:
         assert b1.endpoint_url != b2.endpoint_url
         assert "8080" in b1.endpoint_url
         assert "9090" in b2.endpoint_url
+
+
+# ---------------------------------------------------------------------------
+# New test classes (d31 coverage expansion)
+# ---------------------------------------------------------------------------
+
+
+class TestVLLMBackendStartStop:
+    def test_start_returns_pid(self, monkeypatch):
+        """start() returns a positive integer PID in stub mode."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        pid = backend.start()
+        assert isinstance(pid, int)
+        assert pid > 0
+
+    def test_start_emits_serve_start_evidence(self, monkeypatch):
+        """serve.start evidence is emitted when serve_concurrent is called after start()."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        backend.start()
+        backend.serve_concurrent([{"prompt": "hello"}])
+
+        evidence_types = [
+            e["evidence"].get("type")
+            for e in EvidenceLogger._events
+            if isinstance(e.get("evidence"), dict)
+        ]
+        assert "serve.start" in evidence_types, (
+            f"Expected 'serve.start' in emitted types, got: {evidence_types}"
+        )
+
+    def test_stop_no_error_when_not_started(self, monkeypatch):
+        """stop() on a fresh (never-started) instance must not raise."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        # Should complete without exception
+        backend.stop()
+
+    def test_start_twice_idempotent(self, monkeypatch):
+        """Calling start() twice in stub mode must not crash."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        pid1 = backend.start()
+        pid2 = backend.start()
+        assert pid1 > 0
+        assert pid2 > 0
+
+
+class TestVLLMBuildCommand:
+    def test_command_includes_model_path(self, monkeypatch):
+        """_build_command() must include the model path string."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        from dojo.serve.vllm_backend import VLLMBackend
+        backend = VLLMBackend(
+            model_path=Path("/models/my-model"),
+            profile=_make_hal(),
+            port=8080,
+            context_length=4096,
+        )
+        cmd = backend._build_command()
+        assert "/models/my-model" in cmd or str(Path("/models/my-model")) in cmd
+
+    def test_command_includes_port(self, monkeypatch):
+        """_build_command() must include the port number as a string."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend(port=9876)
+        cmd = backend._build_command()
+        assert "9876" in cmd
+
+    def test_command_includes_context_length(self, monkeypatch):
+        """_build_command() must include the context length."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        from dojo.serve.vllm_backend import VLLMBackend
+        backend = VLLMBackend(
+            model_path=Path("/models/test"),
+            profile=_make_hal(),
+            port=8080,
+            context_length=8192,
+        )
+        cmd = backend._build_command()
+        assert "8192" in cmd
+
+    def test_command_starts_with_vllm_or_python(self, monkeypatch):
+        """_build_command() first token must be 'python' or contain 'vllm'."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        cmd = backend._build_command()
+        assert len(cmd) >= 1
+        # Either starts with python (python -m vllm...) or directly with vllm
+        first = cmd[0].lower()
+        joined = " ".join(cmd).lower()
+        assert "python" in first or "vllm" in joined, (
+            f"Command does not appear to reference python or vllm: {cmd}"
+        )
+
+
+class TestVLLMServeConcurrentStub:
+    def test_result_has_elapsed_s(self, monkeypatch):
+        """Every result dict must contain an 'elapsed_s' key."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        results = backend.serve_concurrent([{"prompt": "a"}, {"prompt": "b"}])
+        for r in results:
+            assert "elapsed_s" in r, f"Missing 'elapsed_s' in result: {r}"
+
+    def test_result_elapsed_s_non_negative(self, monkeypatch):
+        """elapsed_s in every result must be >= 0."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        results = backend.serve_concurrent([{"prompt": "x"}, {"prompt": "y"}, {"prompt": "z"}])
+        for r in results:
+            assert isinstance(r["elapsed_s"], float)
+            assert r["elapsed_s"] >= 0.0, f"elapsed_s must be non-negative, got {r['elapsed_s']}"
+
+    def test_empty_requests_returns_empty(self, monkeypatch):
+        """serve_concurrent([]) must return an empty list."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        results = backend.serve_concurrent([])
+        assert results == []
+
+    def test_result_tokens_is_int(self, monkeypatch):
+        """'tokens' field in every result must be a positive integer."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        results = backend.serve_concurrent([{"prompt": "count tokens"}, {"prompt": "also count"}])
+        for r in results:
+            assert isinstance(r["tokens"], int), f"tokens must be int, got {type(r['tokens'])}"
+            assert r["tokens"] > 0, f"tokens must be > 0, got {r['tokens']}"
+
+    def test_evidence_has_throughput(self, monkeypatch):
+        """SERVE_READY evidence must carry throughput_tokens_per_s > 0 for non-empty requests."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        backend = _make_backend()
+        backend.serve_concurrent([{"prompt": "p1"}, {"prompt": "p2"}, {"prompt": "p3"}])
+
+        serve_ready_data = next(
+            (
+                e["evidence"]["data"]
+                for e in EvidenceLogger._events
+                if isinstance(e.get("evidence"), dict)
+                and e["evidence"].get("type") == "serve.ready"
+            ),
+            None,
+        )
+        assert serve_ready_data is not None, "No serve.ready event found"
+        assert serve_ready_data["throughput_tokens_per_s"] > 0, (
+            f"throughput_tokens_per_s must be > 0, got {serve_ready_data['throughput_tokens_per_s']}"
+        )
+
+
+class TestVLLMMissingPackage:
+    def test_missing_vllm_raises_backend_unavailable(self, monkeypatch):
+        """BackendUnavailable raised when vllm is set to None in sys.modules."""
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        with patch.dict(sys.modules, {"vllm": None}):  # type: ignore[dict-item]
+            backend = _make_backend()
+            with pytest.raises(BackendUnavailable):
+                backend.start()

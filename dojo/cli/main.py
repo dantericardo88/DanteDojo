@@ -510,6 +510,133 @@ def idle_train(
 
 
 # ---------------------------------------------------------------------------
+# Quantization
+# ---------------------------------------------------------------------------
+
+quant_app = typer.Typer(help="Model quantization export commands.", no_args_is_help=True)
+app.add_typer(quant_app, name="quant")
+
+
+@quant_app.command("gguf")
+def quant_gguf(
+    model_path: str = typer.Argument(..., help="Path to HuggingFace model directory"),
+    output_dir: str = typer.Option("./gguf_out", "--output-dir", help="Output directory"),
+    quant_type: str = typer.Option("Q4_K_M", "--quant-type", help="GGUF quantization type (Q4_K_M, Q5_K_M, …)"),
+    passport_id: str = typer.Option("", "--passport-id", help="Constitutional passport ID to embed"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Export a HuggingFace model to GGUF format (llama.cpp target)."""
+    from dojo.quant.gguf import export_gguf
+    import hashlib
+
+    model = Path(model_path)
+    out = Path(output_dir)
+
+    with console.status(f"Exporting {model.name!r} → GGUF ({quant_type})…"):
+        result = export_gguf(
+            model_path=model,
+            output_dir=out,
+            quant_type=quant_type,
+            passport_id=passport_id,
+        )
+
+    h = hashlib.sha256()
+    with result.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(65536), b""):
+            h.update(chunk)
+    info = {
+        "output_path": str(result),
+        "quant_type": quant_type,
+        "file_size_bytes": result.stat().st_size,
+        "sha256": h.hexdigest(),
+        "sidecar": str(result.with_suffix(".meta.json")) if result.with_suffix(".meta.json").exists() else None,
+    }
+
+    if json_out:
+        typer.echo(json.dumps(info, indent=2))
+    else:
+        console.print("[green]GGUF export complete[/green]")
+        console.print(f"  Output: {info['output_path']}")
+        console.print(f"  Size:   {info['file_size_bytes']:,} bytes")
+        if info["sidecar"]:
+            console.print(f"  Sidecar: {info['sidecar']}")
+
+
+@quant_app.command("gptq")
+def quant_gptq(
+    model_path: str = typer.Argument(..., help="Path to HuggingFace model directory"),
+    output_dir: str = typer.Option("./gptq_out", "--output-dir", help="Output directory"),
+    bits: int = typer.Option(4, "--bits", help="Quantization bits (4 or 8)"),
+    group_size: int = typer.Option(128, "--group-size", help="Quantization group size"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Export a HuggingFace model to GPTQ format."""
+    from dojo.quant.gptq import export_gptq
+
+    model = Path(model_path)
+    out = Path(output_dir)
+
+    with console.status(f"Exporting {model.name!r} → GPTQ ({bits}-bit, group={group_size})…"):
+        result = export_gptq(
+            model_path=model,
+            output_dir=out,
+            bits=bits,
+            group_size=group_size,
+        )
+
+    info = {
+        "output_path": str(result),
+        "bits": bits,
+        "group_size": group_size,
+        "file_size_bytes": result.stat().st_size,
+    }
+
+    if json_out:
+        typer.echo(json.dumps(info, indent=2))
+    else:
+        console.print("[green]GPTQ export complete[/green]")
+        console.print(f"  Output: {info['output_path']}")
+        console.print(f"  Bits:   {bits}-bit  group={group_size}")
+
+
+@quant_app.command("awq")
+def quant_awq(
+    model_path: str = typer.Argument(..., help="Path to HuggingFace model directory"),
+    output_dir: str = typer.Option("./awq_out", "--output-dir", help="Output directory"),
+    bits: int = typer.Option(4, "--bits", help="Quantization bits (4 or 8)"),
+    group_size: int = typer.Option(128, "--group-size", help="Quantization group size"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Export a HuggingFace model to AWQ format."""
+    from dojo.quant.awq import export_awq
+
+    model = Path(model_path)
+    out = Path(output_dir)
+
+    with console.status(f"Exporting {model.name!r} → AWQ ({bits}-bit, group={group_size})…"):
+        result = export_awq(
+            model_path=model,
+            output_dir=out,
+            bits=bits,
+            group_size=group_size,
+        )
+
+    info = {
+        "output_path": str(result),
+        "bits": bits,
+        "group_size": group_size,
+        "file_size_bytes": result.stat().st_size,
+    }
+
+    if json_out:
+        typer.echo(json.dumps(info, indent=2))
+    else:
+        console.print("[green]AWQ export complete[/green]")
+        console.print(f"  Output: {info['output_path']}")
+        console.print(f"  Bits:   {bits}-bit  group={group_size}")
+
+
+# ---------------------------------------------------------------------------
 # Layer streaming info
 # ---------------------------------------------------------------------------
 

@@ -330,21 +330,30 @@ class ExperimentTracker:
         self._in_memory_run = None
 
     def list_runs(self, experiment_name: str = "") -> List[Dict[str, Any]]:
-        """List completed runs. Returns MLflow runs when available, empty list otherwise."""
+        """List completed runs. Returns MLflow runs when available, empty list otherwise.
+
+        Each returned dict contains at minimum: run_id, name, status, start_time.
+        When MLflow is available, metric values are also included as top-level keys
+        so that RunLeaderboard.from_tracker() can extract them.
+        """
         if self._mlflow_available:
             try:
                 mlflow = self._get_mlflow()
-                filter_str = f"attributes.experiment_name = '{experiment_name}'" if experiment_name else ""
+                filter_str = f"attributes.run_name = '{experiment_name}'" if experiment_name else ""
                 runs = mlflow.search_runs(filter_string=filter_str, output_format="list")
-                return [
-                    {
+                result = []
+                for r in runs:
+                    entry: Dict[str, Any] = {
                         "run_id": r.info.run_id,
                         "name": r.info.run_name or "",
                         "status": r.info.status,
                         "start_time": str(r.info.start_time),
                     }
-                    for r in runs
-                ]
+                    # Include all logged metrics so leaderboard can rank by them
+                    for metric_key, metric_val in r.data.metrics.items():
+                        entry[metric_key] = metric_val
+                    result.append(entry)
+                return result
             except Exception:
                 return []
         return []
