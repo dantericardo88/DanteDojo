@@ -35,6 +35,8 @@ from dojo.core.exceptions import (
 )
 from dojo.core.one_door import one_door
 from dojo.core.types import HALProfile
+from dojo.experiment.tracker import ExperimentTracker, RunConfig
+from dojo.experiment.wandb_adapter import WandBTrainingCallback
 from dojo.train.base import BaseTrainer, TrainingState
 from dojo.train.checkpoint import CheckpointManager
 from dojo.train.rl_config import DPOConfig, RLTrainResult
@@ -273,6 +275,11 @@ def _run_trl_dpo(
         save_steps=config.grad_accum_steps * config.num_epochs,
     )
 
+    from dojo.experiment.wandb_adapter import WandBAdapter
+    _wandb_adapter = WandBAdapter(use_wandb=True)
+    _wandb_adapter.init_run(config)
+    _wandb_cb = _wandb_adapter.as_callback()
+
     model = AutoModelForCausalLM.from_pretrained(config.base_model)
     tokenizer = AutoTokenizer.from_pretrained(config.base_model)
     cb = _ConstitutionalDPOCallback(config, logger)
@@ -290,6 +297,7 @@ def _run_trl_dpo(
     last_log = state.log_history[-1] if (state and state.log_history) else {}
     chosen_reward = float(last_log.get("rewards/chosen", 0.0))
 
+    _wandb_cb.on_train_end({"final_chosen_reward": chosen_reward, "steps": float(steps)})
     ckpt_mgr.save(steps, {"chosen_reward": chosen_reward, "algorithm": "dpo"})
     return steps, chosen_reward
 
@@ -321,99 +329,127 @@ def dpo_train(
     trainer = BaseTrainer()
     start_time = time.monotonic()
 
-    # ---- IDLE → PROFILING ------------------------------------------------
-    trainer.transition(TrainingState.PROFILING)
-
-    logger.emit(
-        {
-            "type": EvidenceType.DPO_START.value,
-            "data": {
-                "config_hash": config.config_hash(),
-                "pack_id": config.pack_id,
-                "hardware_tier": hal_profile.tier.value,
-                "base_model": config.base_model,
-                "beta": config.beta,
-                "loss_type": config.loss_type,
-                "min_reward_margin": config.min_reward_margin,
-                "algorithm": "dpo",
-            },
-        },
-        organ="dpo",
+    # ---- Experiment tracker setup ----------------------------------------
+    tracking_uri = os.environ.get("DOJO_MLFLOW_URI", "http://127.0.0.1:5000")
+    exp_tracker = ExperimentTracker(tracking_uri=tracking_uri, use_mlflow=True)
+    run_cfg = RunConfig(
+        experiment_name="dojo.dpo",
+        run_name=f"dpo-{config.base_model.replace('/', '-')}",
+        config_hash=config.config_hash(),
+        pack_id=config.pack_id,
+        hardware_tier=hal_profile.tier.value,
+        seed=config.seed,
     )
 
-    # ---- PROFILING → ROUTING ---------------------------------------------
-    trainer.transition(TrainingState.ROUTING)
+    with exp_tracker.run(run_cfg):
+        exp_tracker.log_params({
+            "base_model": config.base_model,
+            "num_epochs": config.num_epochs,
+            "beta": config.beta,
+            "loss_type": config.loss_type,
+            "min_reward_margin": config.min_reward_margin,
+            "learning_rate": config.learning_rate,
+            "hardware_tier": hal_profile.tier.value,
+            "algorithm": "dpo",
+        })
 
-    trl_available = _is_trl_available()
-    real_gpu = _real_gpu_requested()
+        # ---- IDLE → PROFILING ------------------------------------------------
+        trainer.transition(TrainingState.PROFILING)
 
-    logger.emit(
-        {
-            "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
-            "data": {
-                "backend": "trl_dpo",
-                "trl_available": trl_available,
-                "real_gpu_requested": real_gpu,
-                "hardware_tier": hal_profile.tier.value,
-                "algorithm": "dpo",
+        logger.emit(
+            {
+                "type": EvidenceType.DPO_START.value,
+                "data": {
+                    "config_hash": config.config_hash(),
+                    "pack_id": config.pack_id,
+                    "hardware_tier": hal_profile.tier.value,
+                    "base_model": config.base_model,
+                    "beta": config.beta,
+                    "loss_type": config.loss_type,
+                    "min_reward_margin": config.min_reward_margin,
+                    "algorithm": "dpo",
+                },
             },
-        },
-        organ="dpo",
-    )
-
-    # ---- ROUTING → PREPARING --------------------------------------------
-    trainer.transition(TrainingState.PREPARING)
-
-    if real_gpu and not trl_available:
-        raise BackendUnavailable(
-            "TRL is required for DPO training but is not installed.",
-            reason="pip install trl>=0.8.0",
+            organ="dpo",
         )
 
-    # ---- PREPARING → TRAINING -------------------------------------------
-    trainer.transition(TrainingState.TRAINING)
+        # ---- PROFILING → ROUTING ---------------------------------------------
+        trainer.transition(TrainingState.ROUTING)
 
-    ckpt_dir = config.output_dir / "checkpoints"
-    ckpt_mgr = CheckpointManager(ckpt_dir, max_checkpoints=3)
+        trl_available = _is_trl_available()
+        real_gpu = _real_gpu_requested()
 
-    if real_gpu and trl_available:
-        steps_completed, final_chosen = _run_trl_dpo(config, hal_profile, logger, ckpt_mgr)
-    else:
-        steps_completed, final_chosen = _run_native_dpo_steps(config, logger, ckpt_mgr)
-
-    if math.isnan(final_chosen) or math.isinf(final_chosen):
-        trainer.transition(TrainingState.FAILED)
-        raise RLTrainingError(
-            f"DPO chosen reward diverged: final_chosen={final_chosen}",
-            reason="NaN or Inf in chosen reward signal",
+        logger.emit(
+            {
+                "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
+                "data": {
+                    "backend": "trl_dpo",
+                    "trl_available": trl_available,
+                    "real_gpu_requested": real_gpu,
+                    "hardware_tier": hal_profile.tier.value,
+                    "algorithm": "dpo",
+                },
+            },
+            organ="dpo",
         )
 
-    # ---- TRAINING → CHECKPOINTING ---------------------------------------
-    trainer.transition(TrainingState.CHECKPOINTING)
+        # ---- ROUTING → PREPARING --------------------------------------------
+        trainer.transition(TrainingState.PREPARING)
 
-    # ---- CHECKPOINTING → EVALUATING -------------------------------------
-    trainer.transition(TrainingState.EVALUATING)
+        if real_gpu and not trl_available:
+            raise BackendUnavailable(
+                "TRL is required for DPO training but is not installed.",
+                reason="pip install trl>=0.8.0",
+            )
 
-    # ---- EVALUATING → COMPLETED -----------------------------------------
-    trainer.transition(TrainingState.COMPLETED)
+        # ---- PREPARING → TRAINING -------------------------------------------
+        trainer.transition(TrainingState.TRAINING)
 
-    wall_time = time.monotonic() - start_time
-    receipt = logger.compute_merkle_root()
+        ckpt_dir = config.output_dir / "checkpoints"
+        ckpt_mgr = CheckpointManager(ckpt_dir, max_checkpoints=3)
 
-    logger.emit(
-        {
-            "type": EvidenceType.DPO_COMPLETE.value,
-            "data": {
-                "final_chosen_reward": round(final_chosen, 4),
-                "steps_completed": steps_completed,
-                "wall_time_seconds": wall_time,
-                "backend_used": "trl_dpo" if (real_gpu and trl_available) else "native_pytorch",
-                "algorithm": "dpo",
-                "training_receipt": receipt,
+        if real_gpu and trl_available:
+            steps_completed, final_chosen = _run_trl_dpo(config, hal_profile, logger, ckpt_mgr)
+        else:
+            steps_completed, final_chosen = _run_native_dpo_steps(config, logger, ckpt_mgr)
+
+        if math.isnan(final_chosen) or math.isinf(final_chosen):
+            trainer.transition(TrainingState.FAILED)
+            raise RLTrainingError(
+                f"DPO chosen reward diverged: final_chosen={final_chosen}",
+                reason="NaN or Inf in chosen reward signal",
+            )
+
+        # ---- TRAINING → CHECKPOINTING ---------------------------------------
+        trainer.transition(TrainingState.CHECKPOINTING)
+
+        # ---- CHECKPOINTING → EVALUATING -------------------------------------
+        trainer.transition(TrainingState.EVALUATING)
+
+        # ---- EVALUATING → COMPLETED -----------------------------------------
+        trainer.transition(TrainingState.COMPLETED)
+
+        wall_time = time.monotonic() - start_time
+        receipt = logger.compute_merkle_root()
+
+        exp_tracker.log_metrics_batch(
+            {"final_chosen_reward": final_chosen, "steps_completed": float(steps_completed), "wall_time_seconds": wall_time}
+        )
+
+        logger.emit(
+            {
+                "type": EvidenceType.DPO_COMPLETE.value,
+                "data": {
+                    "final_chosen_reward": round(final_chosen, 4),
+                    "steps_completed": steps_completed,
+                    "wall_time_seconds": wall_time,
+                    "backend_used": "trl_dpo" if (real_gpu and trl_available) else "native_pytorch",
+                    "algorithm": "dpo",
+                    "training_receipt": receipt,
+                },
             },
-        },
-        organ="dpo",
-    )
+            organ="dpo",
+        )
 
     return RLTrainResult(
         adapter_path=config.output_dir,

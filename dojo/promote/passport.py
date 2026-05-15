@@ -39,6 +39,10 @@ def build_passport(
     expires_at = issued_at + timedelta(days=90)
     passport_id = str(uuid.uuid4())
 
+    # Propagate revocation_url from the artifact. An empty string means the
+    # caller has not configured revocation checking, and the gate will skip it.
+    revocation_url: str = getattr(candidate, "revocation_url", "")
+
     # Build a preliminary passport to compute the seal (merkle_root).
     # We use a placeholder merkle_root first, then recompute.
     preliminary = ConstitutionalPassport(
@@ -51,7 +55,7 @@ def build_passport(
         merkle_root="",  # placeholder
         issued_at=issued_at,
         expires_at=expires_at,
-        revocation_url="http://127.0.0.1:8002/v1/passport/revoke",
+        revocation_url=revocation_url,
     )
 
     # Compute the real seal
@@ -68,7 +72,7 @@ def build_passport(
         merkle_root=merkle_root,
         issued_at=issued_at,
         expires_at=expires_at,
-        revocation_url="http://127.0.0.1:8002/v1/passport/revoke",
+        revocation_url=revocation_url,
     )
 
     return passport

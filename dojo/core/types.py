@@ -101,12 +101,12 @@ class HALProfile:
     compute_capability: str          # e.g. "8.6" for Ampere, "8.9" for Ada
     has_native_fp8: bool             # True iff CC >= 8.9
     has_native_fp4: bool             # True iff CC >= 10.0 (Blackwell)
-    has_nvlink: bool
-    pcie_gen: int
-    interconnect_bandwidth_gb_s: float
-    memory_bandwidth_gb_s: float
-    driver_version: str
-    profile_sha256: str
+    driver_version: str = ""
+    has_nvlink: bool = False
+    pcie_gen: int = 4
+    interconnect_bandwidth_gb_s: float = 0.0
+    memory_bandwidth_gb_s: float = 0.0
+    profile_sha256: str = ""
     signed_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
 
     @property
@@ -250,6 +250,7 @@ class ModelArtifact:
     training_receipt: str          # Merkle root from evidence chain
     passport: Optional["ConstitutionalPassport"]
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
+    revocation_url: str = ""       # Optional Forge endpoint to check revocation
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -260,6 +261,7 @@ class ModelArtifact:
             "training_receipt": self.training_receipt,
             "has_passport": self.passport is not None,
             "created_at": self.created_at.isoformat(),
+            "revocation_url": self.revocation_url,
         }
 
 

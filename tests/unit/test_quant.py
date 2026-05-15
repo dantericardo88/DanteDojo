@@ -114,27 +114,31 @@ class TestQuantValidator:
 
 class TestExportGguf:
     def test_raises_when_llama_cpp_missing(self, tmp_path):
-        """When llama_cpp is not importable, raise QuantizationError with instructions."""
+        """When llama_cpp is not importable and stub mode is off, raise QuantizationError."""
+        import os
         from dojo.quant import gguf as gguf_module
 
-        with patch.dict(sys.modules, {"llama_cpp": None}):
-            with pytest.raises(QuantizationError) as exc_info:
-                gguf_module.export_gguf(
-                    model_path=tmp_path / "model",
-                    output_dir=tmp_path / "out",
-                )
+        with patch.dict(os.environ, {"DOJO_GGUF_STUB": "0"}):
+            with patch.dict(sys.modules, {"llama_cpp": None}):
+                with pytest.raises(QuantizationError) as exc_info:
+                    gguf_module.export_gguf(
+                        model_path=tmp_path / "model",
+                        output_dir=tmp_path / "out",
+                    )
         assert "llama-cpp-python" in str(exc_info.value)
 
     def test_install_instructions_in_message(self, tmp_path):
         """Error message should contain actionable install instructions."""
+        import os
         from dojo.quant import gguf as gguf_module
 
-        with patch.dict(sys.modules, {"llama_cpp": None}):
-            with pytest.raises(QuantizationError) as exc_info:
-                gguf_module.export_gguf(
-                    model_path=tmp_path / "model",
-                    output_dir=tmp_path / "out",
-                )
+        with patch.dict(os.environ, {"DOJO_GGUF_STUB": "0"}):
+            with patch.dict(sys.modules, {"llama_cpp": None}):
+                with pytest.raises(QuantizationError) as exc_info:
+                    gguf_module.export_gguf(
+                        model_path=tmp_path / "model",
+                        output_dir=tmp_path / "out",
+                    )
         msg = str(exc_info.value)
         assert "pip install" in msg
 

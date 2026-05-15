@@ -1,18 +1,23 @@
-"""Unit tests for d32 (multi-provider routing) and d35 (budget enforcement).
+"""Unit tests for d32 (multi-provider routing), d35 (budget enforcement),
+and d36 (circuit breaker / fallback policy).
 
 d32 — dispatch() routes to ≥3 real providers; routing decision in evidence chain.
-d35 — Budget enforcement fires on over-limit request; cost in evidence.
+d35 — Budget enforcement fires on over-limit request; cost in evidence;
+      record_from_response() tracks real token counts.
+d36 — Circuit breaker marks providers dead after threshold failures.
 """
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import BudgetExceeded, PrivacyTierViolation
-from dojo.core.types import PrivacyTier, RoutingOption, RoutingPolicy
+from dojo.core.types import CostReceipt, PrivacyTier, RoutingOption, RoutingPolicy
+from dojo.route import router
 from dojo.route.cost_tracker import CostTracker
 from dojo.route.router import dispatch
 
@@ -245,3 +250,212 @@ class TestBudgetEnforcement:
             tracker.check_budget(0.05)
         msg = str(exc_info.value)
         assert "$" in msg
+
+
+# ---------------------------------------------------------------------------
+# d35 — record_from_response() real token cost + get_provider_stats()
+# ---------------------------------------------------------------------------
+
+def _make_receipt(
+    route: RoutingOption = RoutingOption.API_HAIKU,
+    task: str = "test",
+) -> CostReceipt:
+    return CostReceipt(
+        task=task,
+        route_taken=route.value,
+        tokens_in=10,
+        tokens_out=0,
+        cost_usd=0.0,
+        latency_ms=100.0,
+        local_displaced_estimate_usd=0.0,
+        recorded_at=datetime.now(timezone.utc),
+    )
+
+
+class TestRecordFromResponse:
+    def test_record_from_response_computes_correct_cost(self, tmp_path: Path):
+        """record_from_response() computes cost from real token counts."""
+        tracker = CostTracker(storage_path=tmp_path / "receipts.jsonl")
+        receipt = _make_receipt(RoutingOption.API_HAIKU)
+
+        # API_HAIKU = $0.00025 / 1k tokens; 2000 total tokens → $0.00050
+        updated = tracker.record_from_response(receipt, response_tokens=1000, prompt_tokens=1000)
+
+        expected_cost = round((2000 / 1000.0) * 0.00025, 8)
+        assert abs(updated.cost_usd - expected_cost) < 1e-9
+        assert updated.tokens_in == 1000
+        assert updated.tokens_out == 1000
+
+    def test_record_from_response_updates_token_counts(self, tmp_path: Path):
+        """record_from_response() sets tokens_in and tokens_out from real values."""
+        tracker = CostTracker(storage_path=tmp_path / "receipts.jsonl")
+        receipt = _make_receipt(RoutingOption.API_SONNET)
+
+        updated = tracker.record_from_response(receipt, response_tokens=250, prompt_tokens=750)
+
+        assert updated.tokens_in == 750
+        assert updated.tokens_out == 250
+
+    def test_record_from_response_emits_evidence(self, tmp_path: Path):
+        """record_from_response() emits ROUTE_COST_RECEIPT evidence with actual_tokens=True."""
+        tracker = CostTracker(storage_path=tmp_path / "receipts.jsonl")
+        receipt = _make_receipt(RoutingOption.API_DEEPSEEK)
+
+        tracker.record_from_response(receipt, response_tokens=100, prompt_tokens=200)
+
+        receipts = _cost_receipt_events()
+        actual_token_events = [e for e in receipts if e.get("actual_tokens") is True]
+        assert len(actual_token_events) >= 1
+        ev = actual_token_events[0]
+        assert ev["prompt_tokens"] == 200
+        assert ev["response_tokens"] == 100
+        assert ev["total_tokens"] == 300
+
+    def test_record_from_response_persists_to_jsonl(self, tmp_path: Path):
+        """record_from_response() appends receipt to the JSONL store."""
+        storage = tmp_path / "receipts.jsonl"
+        tracker = CostTracker(storage_path=storage)
+        receipt = _make_receipt(RoutingOption.API_HAIKU)
+
+        tracker.record_from_response(receipt, response_tokens=50, prompt_tokens=50)
+
+        loaded = tracker.load_receipts()
+        assert len(loaded) == 1
+        assert loaded[0].tokens_in == 50
+        assert loaded[0].tokens_out == 50
+
+    def test_record_from_response_sonnet_cost(self, tmp_path: Path):
+        """record_from_response() uses correct rate for API_SONNET ($0.003/1k)."""
+        tracker = CostTracker(storage_path=tmp_path / "receipts.jsonl")
+        receipt = _make_receipt(RoutingOption.API_SONNET)
+
+        # 500 prompt + 500 response = 1000 tokens → $0.003
+        updated = tracker.record_from_response(receipt, response_tokens=500, prompt_tokens=500)
+
+        expected = round((1000 / 1000.0) * 0.003, 8)
+        assert abs(updated.cost_usd - expected) < 1e-9
+
+
+class TestGetProviderStats:
+    def test_get_provider_stats_empty(self, tmp_path: Path):
+        """get_provider_stats() returns empty dict when no receipts stored."""
+        tracker = CostTracker(storage_path=tmp_path / "receipts.jsonl")
+        stats = tracker.get_provider_stats()
+        assert stats == {}
+
+    def test_get_provider_stats_single_provider(self, tmp_path: Path):
+        """get_provider_stats() aggregates correctly for a single provider."""
+        tracker = CostTracker(storage_path=tmp_path / "receipts.jsonl")
+        receipt = _make_receipt(RoutingOption.API_HAIKU)
+        tracker.record_from_response(receipt, response_tokens=100, prompt_tokens=100)
+        tracker.record_from_response(receipt, response_tokens=200, prompt_tokens=200)
+
+        stats = tracker.get_provider_stats()
+        key = RoutingOption.API_HAIKU.value
+        assert key in stats
+        assert stats[key]["call_count"] == 2
+        assert stats[key]["total_tokens"] == 600  # (100+100) + (200+200)
+        expected_cost = round((200 / 1000.0) * 0.00025 + (400 / 1000.0) * 0.00025, 8)
+        assert abs(stats[key]["total_usd"] - expected_cost) < 1e-7
+
+    def test_get_provider_stats_multiple_providers(self, tmp_path: Path):
+        """get_provider_stats() tracks separate totals per provider."""
+        tracker = CostTracker(storage_path=tmp_path / "receipts.jsonl")
+        tracker.record_from_response(
+            _make_receipt(RoutingOption.API_HAIKU), response_tokens=100, prompt_tokens=100
+        )
+        tracker.record_from_response(
+            _make_receipt(RoutingOption.API_DEEPSEEK), response_tokens=200, prompt_tokens=200
+        )
+
+        stats = tracker.get_provider_stats()
+        assert RoutingOption.API_HAIKU.value in stats
+        assert RoutingOption.API_DEEPSEEK.value in stats
+        assert stats[RoutingOption.API_HAIKU.value]["call_count"] == 1
+        assert stats[RoutingOption.API_DEEPSEEK.value]["call_count"] == 1
+
+    def test_get_provider_stats_call_count_accurate(self, tmp_path: Path):
+        """get_provider_stats() call_count matches number of persisted receipts."""
+        tracker = CostTracker(storage_path=tmp_path / "receipts.jsonl")
+        for _ in range(5):
+            tracker.record_from_response(
+                _make_receipt(RoutingOption.API_SONNET), response_tokens=10, prompt_tokens=10
+            )
+
+        stats = tracker.get_provider_stats()
+        assert stats[RoutingOption.API_SONNET.value]["call_count"] == 5
+
+
+# ---------------------------------------------------------------------------
+# d32 — circuit breaker tests
+# ---------------------------------------------------------------------------
+
+class TestCircuitBreaker:
+    @pytest.fixture(autouse=True)
+    def reset_circuit_state(self):
+        """Reset circuit breaker and dead providers between tests."""
+        router._DEAD_PROVIDERS.clear()
+        router._circuit_breaker.clear()
+        yield
+        router._DEAD_PROVIDERS.clear()
+        router._circuit_breaker.clear()
+
+    def test_circuit_breaker_marks_dead_after_threshold(self):
+        """After _CIRCUIT_BREAKER_THRESHOLD failures, provider is in _DEAD_PROVIDERS."""
+        option = RoutingOption.API_HAIKU
+        threshold = router._CIRCUIT_BREAKER_THRESHOLD
+
+        for _ in range(threshold):
+            router._record_provider_failure(option)
+
+        assert option.value in router._DEAD_PROVIDERS
+
+    def test_circuit_breaker_does_not_mark_dead_before_threshold(self):
+        """Fewer than threshold failures → provider NOT marked dead."""
+        option = RoutingOption.API_HAIKU
+        threshold = router._CIRCUIT_BREAKER_THRESHOLD
+
+        for _ in range(threshold - 1):
+            router._record_provider_failure(option)
+
+        assert option.value not in router._DEAD_PROVIDERS
+
+    def test_circuit_breaker_resets_counter_on_success(self):
+        """_record_provider_success() resets failure counter and removes from dead set."""
+        option = RoutingOption.API_HAIKU
+        threshold = router._CIRCUIT_BREAKER_THRESHOLD
+
+        # Drive to dead
+        for _ in range(threshold):
+            router._record_provider_failure(option)
+        assert option.value in router._DEAD_PROVIDERS
+
+        # Recover
+        router._record_provider_success(option)
+        assert option.value not in router._DEAD_PROVIDERS
+        assert router._circuit_breaker.get(option.value, 0) == 0
+
+    def test_circuit_breaker_counter_resets_after_threshold(self):
+        """Counter resets to 0 once provider is added to _DEAD_PROVIDERS."""
+        option = RoutingOption.API_DEEPSEEK
+        threshold = router._CIRCUIT_BREAKER_THRESHOLD
+
+        for _ in range(threshold):
+            router._record_provider_failure(option)
+
+        assert router._circuit_breaker.get(option.value, 0) == 0
+
+    def test_dispatch_skips_dead_provider_from_circuit_breaker(self):
+        """Provider killed by circuit breaker is skipped by dispatch()."""
+        option = RoutingOption.API_HAIKU
+        threshold = router._CIRCUIT_BREAKER_THRESHOLD
+
+        for _ in range(threshold):
+            router._record_provider_failure(option)
+
+        policy = _make_policy(
+            options=[RoutingOption.API_HAIKU, RoutingOption.LOCAL_GENERALIST],
+            privacy_tier=PrivacyTier.PUBLIC,
+        )
+        result = dispatch(task="test", input_text="hello", policy=policy)
+        assert result["route"] == RoutingOption.LOCAL_GENERALIST.value

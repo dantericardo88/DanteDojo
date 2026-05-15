@@ -24,7 +24,9 @@ from dojo.serve.openai_compat import (
     ChatMessage,
     ChatCompletionRequest,
     _messages_to_prompt,
+    _LOADED_MODELS,
     create_app,
+    stop_serving,
 )
 
 # ---------------------------------------------------------------------------
@@ -50,8 +52,10 @@ pytestmark = pytest.mark.skipif(
 @pytest.fixture(autouse=True)
 def clear_evidence():
     EvidenceLogger.clear()
+    _LOADED_MODELS.clear()
     yield
     EvidenceLogger.clear()
+    _LOADED_MODELS.clear()
 
 
 @pytest.fixture()
@@ -370,3 +374,102 @@ class TestMessagesToPrompt:
         prompt = _messages_to_prompt(msgs)
         assert "<|system|>" in prompt
         assert "<|user|>" in prompt
+
+
+# ---------------------------------------------------------------------------
+# 9. /health — degraded when backend unreachable
+# ---------------------------------------------------------------------------
+
+class TestHealthDegraded:
+    def test_health_degraded_when_backend_down(self):
+        """When the backend is unreachable, /health reports backend_healthy=False."""
+        from unittest.mock import AsyncMock, patch
+        app = create_app(backend_url="http://localhost:19999", model_id="test-model")
+        c = TestClient(app, raise_server_exceptions=True)
+
+        with patch(
+            "dojo.serve.openai_compat._is_backend_healthy",
+            new=AsyncMock(return_value=False),
+        ):
+            resp = c.get("/health")
+
+        assert resp.status_code == 200
+        assert resp.json()["backend_healthy"] is False
+
+    def test_health_ok_when_backend_up(self):
+        """When the backend is healthy, /health should return status=ok."""
+        from unittest.mock import AsyncMock, patch
+        app = create_app(backend_url="http://localhost:19999", model_id="test-model")
+        c = TestClient(app, raise_server_exceptions=True)
+
+        with patch(
+            "dojo.serve.openai_compat._is_backend_healthy",
+            new=AsyncMock(return_value=True),
+        ):
+            resp = c.get("/health")
+
+        assert resp.status_code == 200
+        assert resp.json()["status"] == "ok"
+
+
+# ---------------------------------------------------------------------------
+# 10. /v1/models — lists all registered models
+# ---------------------------------------------------------------------------
+
+class TestLoadedModelsRegistry:
+    def test_multiple_models_registered(self):
+        """Creating two apps registers two models in /v1/models."""
+        a1 = create_app(backend_url="http://localhost:9999", model_id="model-a")
+        a2 = create_app(backend_url="http://localhost:9999", model_id="model-b")
+        # Query via either app — both share the same _LOADED_MODELS dict
+        c = TestClient(a1)
+        resp = c.get("/v1/models")
+        ids = {m["id"] for m in resp.json()["data"]}
+        assert "model-a" in ids
+        assert "model-b" in ids
+
+    def test_model_passport_id_stored(self):
+        """passport_id is preserved in the loaded-models registry."""
+        app = create_app(
+            backend_url="http://localhost:9999",
+            model_id="passport-model",
+            passport_id="pp-reg-001",
+        )
+        c = TestClient(app)
+        resp = c.get("/v1/models")
+        data = resp.json()["data"]
+        match = next((m for m in data if m["id"] == "passport-model"), None)
+        assert match is not None
+        assert match["passport_id"] == "pp-reg-001"
+
+
+# ---------------------------------------------------------------------------
+# 11. stop_serving — calls backend.stop()
+# ---------------------------------------------------------------------------
+
+class TestStopServing:
+    def test_stop_serving_no_backend_no_error(self):
+        """stop_serving() with no active backend must not raise."""
+        stop_serving()  # should be a no-op
+
+    def test_stop_serving_calls_backend_stop(self):
+        """stop_serving() calls .stop() on _backend_instance if set."""
+        from unittest.mock import MagicMock
+        import dojo.serve.openai_compat as _compat
+
+        mock_backend = MagicMock()
+        _compat._backend_instance = mock_backend
+
+        stop_serving()
+
+        mock_backend.stop.assert_called_once()
+        assert _compat._backend_instance is None
+
+    def test_stop_serving_clears_instance(self):
+        """After stop_serving(), _backend_instance must be None."""
+        from unittest.mock import MagicMock
+        import dojo.serve.openai_compat as _compat
+
+        _compat._backend_instance = MagicMock()
+        stop_serving()
+        assert _compat._backend_instance is None

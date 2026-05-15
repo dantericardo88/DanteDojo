@@ -28,6 +28,12 @@ from dojo.core.types import (
 # Any RoutingOption.value string placed here will be treated as unavailable.
 _DEAD_PROVIDERS: set[str] = set()
 
+# Circuit breaker: tracks consecutive failures per provider.
+# After _CIRCUIT_BREAKER_THRESHOLD consecutive failures the provider is added
+# to _DEAD_PROVIDERS and the counter resets.
+_circuit_breaker: dict[str, int] = {}
+_CIRCUIT_BREAKER_THRESHOLD = 3
+
 # Route options that require external API access
 _EXTERNAL_API_OPTIONS: frozenset[RoutingOption] = frozenset({
     RoutingOption.API_HAIKU,
@@ -51,26 +57,61 @@ _API_COST_PER_1K: dict[RoutingOption, float] = {
 }
 
 
+def _health_check_with_timeout(endpoint: str, timeout: float = 3.0) -> bool:
+    """Perform a real HEAD request to *endpoint* with the given timeout.
+
+    Returns True if the server responds with any HTTP status, False on URLError.
+    Only called when DOJO_REAL_GPU=1 or DOJO_HEALTH_CHECK=1 is set.
+    """
+    import urllib.error
+    import urllib.request
+
+    try:
+        req = urllib.request.Request(endpoint, method="HEAD")
+        with urllib.request.urlopen(req, timeout=timeout):
+            pass
+        return True
+    except urllib.error.URLError:
+        return False
+
+
+def _record_provider_failure(option: RoutingOption) -> None:
+    """Increment failure count for *option*; mark dead after threshold."""
+    key = option.value
+    _circuit_breaker[key] = _circuit_breaker.get(key, 0) + 1
+    if _circuit_breaker[key] >= _CIRCUIT_BREAKER_THRESHOLD:
+        _DEAD_PROVIDERS.add(key)
+        _circuit_breaker[key] = 0
+
+
+def _record_provider_success(option: RoutingOption) -> None:
+    """Reset circuit-breaker counter on success; remove from dead set."""
+    key = option.value
+    _circuit_breaker[key] = 0
+    _DEAD_PROVIDERS.discard(key)
+
+
 def _is_provider_alive(option: RoutingOption) -> bool:
     """Return False if the provider is known dead; True otherwise.
 
-    In real-GPU mode (DOJO_REAL_GPU=1) a HEAD request is made to the endpoint.
-    In stub/test mode only _DEAD_PROVIDERS is consulted.
+    In real-GPU mode (DOJO_REAL_GPU=1) or when DOJO_HEALTH_CHECK=1 a HEAD
+    request is made to the endpoint. In plain stub/test mode only
+    _DEAD_PROVIDERS is consulted (no network calls).
     """
     if option.value in _DEAD_PROVIDERS:
         return False
 
-    if os.environ.get("DOJO_REAL_GPU") == "1":
-        import urllib.error
-        import urllib.request
+    real_gpu = os.environ.get("DOJO_REAL_GPU") == "1"
+    health_check = os.environ.get("DOJO_HEALTH_CHECK") == "1"
+
+    if real_gpu or health_check:
         endpoint = _api_endpoint(option)
         if endpoint:
-            try:
-                req = urllib.request.Request(endpoint, method="HEAD")
-                with urllib.request.urlopen(req, timeout=3.0):
-                    pass
-            except urllib.error.URLError:
+            alive = _health_check_with_timeout(endpoint, timeout=3.0)
+            if not alive:
+                _record_provider_failure(option)
                 return False
+            _record_provider_success(option)
     return True
 
 
@@ -309,4 +350,12 @@ def _build_receipt(task: str, option: RoutingOption, input_text: str) -> CostRec
     )
 
 
-__all__ = ["dispatch", "_DEAD_PROVIDERS"]
+__all__ = [
+    "dispatch",
+    "_DEAD_PROVIDERS",
+    "_circuit_breaker",
+    "_CIRCUIT_BREAKER_THRESHOLD",
+    "_record_provider_failure",
+    "_record_provider_success",
+    "_health_check_with_timeout",
+]

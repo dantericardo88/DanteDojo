@@ -14,6 +14,8 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -67,9 +69,6 @@ def export_gguf(
     """
     logger = EvidenceLogger.get_instance()
 
-    # Gate: always verify llama-cpp-python is importable (tests inject mock via sys.modules)
-    _require_llama_cpp()
-
     model_name = model_path.name or "model"
     output_filename = f"{model_name}-{quant_type}.gguf"
     output_path = output_dir / output_filename
@@ -93,6 +92,13 @@ def export_gguf(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     convert_script = _find_convert_script()
+
+    # Gate: require llama_cpp Python bindings only when no convert script is
+    # available AND we are not in stub mode.  The subprocess conversion path
+    # does not need the Python bindings, so we skip the check when a script
+    # is present (tests inject a fake script without installing llama_cpp).
+    if convert_script is None and not _stub_mode():
+        _require_llama_cpp()
 
     if convert_script is not None:
         # Real conversion path
@@ -144,10 +150,12 @@ def export_gguf(
 # ---------------------------------------------------------------------------
 
 def _require_llama_cpp() -> None:
-    """Raise QuantizationError with install instructions if llama-cpp-python is absent."""
+    """Gate: in real mode require llama_cpp; in stub mode, skip."""
+    if _stub_mode():
+        return  # Stub mode: no requirement
     try:
         import llama_cpp  # noqa: F401
-    except ImportError as exc:
+    except (ImportError, RuntimeError) as exc:
         raise QuantizationError(
             _INSTALL_INSTRUCTIONS,
             reason=_INSTALL_INSTRUCTIONS,
@@ -166,23 +174,57 @@ def _find_convert_script() -> Optional[Path]:
     """Find llama.cpp's convert_hf_to_gguf.py in common locations."""
     # 1. Bundled with llama-cpp-python
     try:
-        import llama_cpp  # noqa: F401
+        import llama_cpp  # noqa: F401  # type: ignore[import]
         pkg_dir = Path(llama_cpp.__file__).parent
         script = pkg_dir / "convert_hf_to_gguf.py"
         if script.exists():
             return script
-    except ImportError:
+    except (ImportError, RuntimeError):
         pass
 
-    # 2. Local llama.cpp clone (common locations)
-    for candidate in [
+    # 2. Local llama.cpp clone (common locations, including Windows)
+    env_path = os.environ.get("LLAMA_CPP_PATH", "")
+    candidates = [
         Path.home() / "llama.cpp" / "convert_hf_to_gguf.py",
         Path("/usr/local/lib/llama.cpp/convert_hf_to_gguf.py"),
         Path("llama.cpp/convert_hf_to_gguf.py"),
-    ]:
+    ]
+    if env_path:
+        candidates.append(Path(env_path) / "convert_hf_to_gguf.py")
+
+    for candidate in candidates:
         if candidate.exists():
             return candidate
 
+    # 3. Try auto-download if enabled
+    downloaded = _download_convert_script()
+    if downloaded is not None:
+        return downloaded
+
+    return None
+
+
+def _download_convert_script() -> Optional[Path]:
+    """Download convert_hf_to_gguf.py from llama.cpp repo if DOJO_AUTO_DOWNLOAD_SCRIPTS=1.
+
+    Uses urllib.request.urlretrieve to save to a temp dir.
+    Returns the path on success, None otherwise.
+    """
+    if os.environ.get("DOJO_AUTO_DOWNLOAD_SCRIPTS", "0") != "1":
+        return None
+
+    _SCRIPT_URL = (
+        "https://raw.githubusercontent.com/ggerganov/llama.cpp/master/convert_hf_to_gguf.py"
+    )
+    try:
+        dest_dir = Path(tempfile.gettempdir()) / "dojo_llama_cpp"
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest = dest_dir / "convert_hf_to_gguf.py"
+        urllib.request.urlretrieve(_SCRIPT_URL, str(dest))
+        if dest.exists():
+            return dest
+    except Exception:
+        pass
     return None
 
 

@@ -1,7 +1,7 @@
-"""DanteDojo promotion gate — Three-way promotion FSM.
+"""DanteDojo promotion gate — Four-way promotion FSM.
 
 Single one-door entry: promote(). Runs HARVEST_CHECK → DOJO_CHECK →
-FORGE_CHECK → PASSPORT_BUILD → SEALED.
+FORGE_CHECK → PASSPORT_BUILD → REVOCATION_CHECK → SEALED.
 
 Any gate failure transitions to BLOCKED and raises PromotionBlocked.
 """
@@ -29,6 +29,7 @@ class GateState(Enum):
     DOJO_CHECK = "dojo_check"
     FORGE_CHECK = "forge_check"
     PASSPORT_BUILD = "passport_build"
+    REVOCATION_CHECK = "revocation_check"
     SEALED = "sealed"
     BLOCKED = "blocked"
 
@@ -61,7 +62,8 @@ class _PromotionFSM(BaseFSM[GateState]):
         GateState.HARVEST_CHECK: frozenset({GateState.DOJO_CHECK, GateState.BLOCKED}),
         GateState.DOJO_CHECK: frozenset({GateState.FORGE_CHECK, GateState.BLOCKED}),
         GateState.FORGE_CHECK: frozenset({GateState.PASSPORT_BUILD, GateState.BLOCKED}),
-        GateState.PASSPORT_BUILD: frozenset({GateState.SEALED, GateState.BLOCKED}),
+        GateState.PASSPORT_BUILD: frozenset({GateState.REVOCATION_CHECK, GateState.BLOCKED}),
+        GateState.REVOCATION_CHECK: frozenset({GateState.SEALED, GateState.BLOCKED}),
         GateState.SEALED: frozenset(),
         GateState.BLOCKED: frozenset(),
     }
@@ -83,15 +85,16 @@ def promote(
     baseline_f1: float = 0.70,
     candidate_f1: float = 0.80,
 ) -> ConstitutionalPassport:
-    """Run the three-way gate: HARVEST_CHECK → DOJO_CHECK → FORGE_CHECK → PASSPORT_BUILD → SEALED.
+    """Run the four-way gate: HARVEST_CHECK → DOJO_CHECK → FORGE_CHECK → PASSPORT_BUILD → REVOCATION_CHECK → SEALED.
 
-    All three must return passed=True.
+    All gate checks must pass.
     ANY failure → transition to BLOCKED → raise PromotionBlocked.
 
     Emits:
     - PROMOTE_HARVEST_GREEN or PROMOTE_HARVEST_BLOCKED
     - PROMOTE_DOJO_GREEN or PROMOTE_DOJO_BLOCKED
     - PROMOTE_FORGE_GREEN or PROMOTE_FORGE_BLOCKED
+    - REVOCATION_CHECKED (if revocation_url is set on the passport)
     - PROMOTE_PASSPORT_ISSUED
     """
     from dojo.promote.dojo_check import check_dojo  # noqa: PLC0415
@@ -170,7 +173,24 @@ def promote(
             reasons=[str(exc)],
         ) from exc
 
-    # PASSPORT_BUILD → SEALED
+    # PASSPORT_BUILD → REVOCATION_CHECK
+    fsm.transition(GateState.REVOCATION_CHECK)
+
+    # Check passport is not revoked (if revocation_url is set on the passport)
+    revocation_url = passport.revocation_url or ""
+    if revocation_url:
+        from dojo.promote.revocation import check_revocation  # noqa: PLC0415
+        try:
+            check_revocation(passport)
+        except Exception as exc:
+            fsm.transition(GateState.BLOCKED)
+            raise PromotionBlocked(
+                f"Revocation check failed for artifact '{candidate.artifact_id}': {exc}",
+                gate="revocation_check",
+                reasons=[str(exc)],
+            ) from exc
+
+    # REVOCATION_CHECK → SEALED
     fsm.transition(GateState.SEALED)
 
     logger.emit(
@@ -183,6 +203,7 @@ def promote(
                 "merkle_root": passport.merkle_root,
                 "issued_at": passport.issued_at.isoformat(),
                 "expires_at": passport.expires_at.isoformat(),
+                "revocation_url": revocation_url or None,
                 "fsm_history": [(a.value, b.value) for a, b in fsm.history],
             },
         },

@@ -263,3 +263,231 @@ class TestLocalRunnerStubTextContainsPrompt:
         prompt = "one two three four five"
         result = runner.generate(prompt)
         assert result["prompt_tokens"] == 5
+
+
+# ---------------------------------------------------------------------------
+# GGUF export tests (d24)
+# ---------------------------------------------------------------------------
+
+from unittest.mock import patch as _patch
+
+
+@pytest.fixture(autouse=False)
+def stub_gguf_env(monkeypatch):
+    """Ensure DOJO_REAL_GPU=0 and DOJO_GGUF_STUB=1 for export tests."""
+    monkeypatch.setenv("DOJO_REAL_GPU", "0")
+    monkeypatch.setenv("DOJO_GGUF_STUB", "1")
+
+
+class TestExportGgufStubMode:
+    """export_gguf works without llama_cpp installed in stub mode."""
+
+    def test_export_succeeds_without_llama_cpp(self, tmp_path, stub_gguf_env):
+        """Stub mode must export successfully even if llama_cpp is not installed."""
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "mymodel"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        # Remove llama_cpp from sys.modules to simulate it being absent
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            result = export_gguf(model_dir, out_dir, quant_type="Q4_K_M")
+
+        assert result.exists(), f"Output GGUF not found: {result}"
+
+    def test_stub_output_has_gguf_magic(self, tmp_path, stub_gguf_env):
+        """Stub GGUF output must start with the GGUF magic bytes 0x47 0x47 0x55 0x46."""
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            result = export_gguf(model_dir, out_dir)
+
+        magic = result.read_bytes()[:4]
+        assert magic == b"\x47\x47\x55\x46", f"Expected GGUF magic, got: {magic!r}"
+
+    def test_stub_output_path_contains_quant_type(self, tmp_path, stub_gguf_env):
+        """Output filename must include the quant_type string."""
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "mymodel"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            result = export_gguf(model_dir, out_dir, quant_type="Q5_K_M")
+
+        assert "Q5_K_M" in result.name
+
+
+class TestExportGgufPassportSidecar:
+    """Passport metadata sidecar is written when passport_id is provided."""
+
+    def test_sidecar_written_with_passport_id(self, tmp_path, stub_gguf_env):
+        """When passport_id is given, a .meta.json sidecar must be created."""
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "m"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            result = export_gguf(model_dir, out_dir, passport_id="pp-test-123")
+
+        sidecar = result.with_suffix(".meta.json")
+        assert sidecar.exists(), "Expected .meta.json sidecar alongside GGUF"
+
+    def test_sidecar_contains_passport_id(self, tmp_path, stub_gguf_env):
+        """The sidecar JSON must have dojo.passport_id matching the provided value."""
+        import json as _json
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "m"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+        pid = "pp-constitutional-456"
+
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            result = export_gguf(model_dir, out_dir, passport_id=pid)
+
+        sidecar = result.with_suffix(".meta.json")
+        meta = _json.loads(sidecar.read_text(encoding="utf-8"))
+        assert meta.get("dojo.passport_id") == pid
+
+    def test_no_sidecar_without_passport_id(self, tmp_path, stub_gguf_env):
+        """When no passport_id is provided, no .meta.json sidecar should be written."""
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "m"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            result = export_gguf(model_dir, out_dir)
+
+        sidecar = result.with_suffix(".meta.json")
+        assert not sidecar.exists(), "Sidecar should not be written without passport_id"
+
+    def test_sidecar_has_sha256(self, tmp_path, stub_gguf_env):
+        """The sidecar must include a dojo.gguf_sha256 field."""
+        import json as _json
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "m"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            result = export_gguf(model_dir, out_dir, passport_id="pp-sha")
+
+        meta = _json.loads(result.with_suffix(".meta.json").read_text(encoding="utf-8"))
+        assert "dojo.gguf_sha256" in meta
+        assert len(meta["dojo.gguf_sha256"]) == 64  # sha256 hex digest length
+
+
+class TestExportGgufRealConversionMocked:
+    """Real conversion path: mock _find_convert_script + subprocess to verify integration."""
+
+    def test_real_conversion_calls_subprocess(self, tmp_path, monkeypatch):
+        """When a convert script is found, subprocess.run should be called."""
+        import subprocess as _subprocess
+        from dojo.quant.gguf import export_gguf
+
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        monkeypatch.setenv("DOJO_GGUF_STUB", "0")
+
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+        fake_script = tmp_path / "convert_hf_to_gguf.py"
+        fake_script.write_text("# mock", encoding="utf-8")
+
+        # subprocess.run returns success; also create the f16 output file
+        f16_path = out_dir / f"{model_dir.name}-f16.gguf"
+
+        def fake_run(cmd, **kwargs):
+            # Create the f16 output when the convert script "runs"
+            out_dir.mkdir(parents=True, exist_ok=True)
+            f16_path.write_bytes(b"\x47\x47\x55\x46" + b"\x00" * 20)
+            r = MagicMock()
+            r.returncode = 0
+            r.stderr = ""
+            return r
+
+        with _patch("dojo.quant.gguf._find_convert_script", return_value=fake_script):
+            with _patch("subprocess.run", side_effect=fake_run) as mock_run:
+                result = export_gguf(model_dir, out_dir, quant_type="Q4_K_M")
+
+        assert mock_run.called, "subprocess.run should have been called for real conversion"
+        assert result.exists()
+
+    def test_real_mode_no_llama_cpp_stub_disabled_raises(self, tmp_path, monkeypatch):
+        """When stub is disabled and no convert script found, raise QuantizationError."""
+        from dojo.quant.gguf import export_gguf
+        from dojo.core.exceptions import QuantizationError
+
+        monkeypatch.setenv("DOJO_REAL_GPU", "0")
+        monkeypatch.setenv("DOJO_GGUF_STUB", "0")
+
+        model_dir = tmp_path / "model"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        with _patch("dojo.quant.gguf._find_convert_script", return_value=None):
+            with _patch.dict(sys.modules, {"llama_cpp": None}):
+                with pytest.raises(QuantizationError):
+                    export_gguf(model_dir, out_dir)
+
+
+class TestExportGgufEvidenceEmission:
+    """export_gguf emits QUANTIZATION_START and QUANTIZATION_COMPLETE evidence."""
+
+    def test_emits_quantization_start(self, tmp_path, stub_gguf_env):
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "m"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            export_gguf(model_dir, out_dir)
+
+        events = EvidenceLogger.get_events()
+        types = [e["type"] for e in events]
+        assert "quant.start" in types
+
+    def test_emits_quantization_complete(self, tmp_path, stub_gguf_env):
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "m"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            export_gguf(model_dir, out_dir)
+
+        events = EvidenceLogger.get_events()
+        types = [e["type"] for e in events]
+        assert "quant.complete" in types
+
+    def test_complete_event_has_stub_flag(self, tmp_path, stub_gguf_env):
+        from dojo.quant.gguf import export_gguf
+
+        model_dir = tmp_path / "m"
+        model_dir.mkdir()
+        out_dir = tmp_path / "out"
+
+        with _patch.dict(sys.modules, {"llama_cpp": None}):
+            export_gguf(model_dir, out_dir)
+
+        events = EvidenceLogger.get_events()
+        complete_ev = next(
+            (e for e in events if e["type"] == "quant.complete"),
+            None,
+        )
+        assert complete_ev is not None
+        assert complete_ev["data"].get("stub") is True

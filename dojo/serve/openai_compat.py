@@ -9,10 +9,20 @@ from __future__ import annotations
 
 import time
 import uuid
-from typing import Any, AsyncIterator, List, Optional
+from typing import Any, AsyncIterator, Dict, List, Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import ServeError
+
+# ---------------------------------------------------------------------------
+# Module-level state
+# ---------------------------------------------------------------------------
+
+# Registry of loaded models: model_id -> metadata dict
+_LOADED_MODELS: Dict[str, Dict[str, Any]] = {}
+
+# Auto-start backend instance (set when DOJO_AUTO_START_BACKEND=1)
+_backend_instance: Optional[Any] = None
 
 
 # ---------------------------------------------------------------------------
@@ -37,6 +47,46 @@ def _require_fastapi() -> None:
             "fastapi is not installed. Install with: pip install fastapi uvicorn",
             reason="fastapi package not found",
         )
+
+
+# ---------------------------------------------------------------------------
+# Backend health / auto-start helpers
+# ---------------------------------------------------------------------------
+
+async def _is_backend_healthy(backend_url: str = "http://localhost:8080") -> bool:
+    """Return True if the backend /health endpoint responds with HTTP 200."""
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=3.0) as client:
+            resp = await client.get(f"{backend_url}/health")
+            return resp.status_code == 200
+    except Exception:
+        return False
+
+
+async def _ensure_backend_running(backend_url: str, model_id: str, port: int = 8080) -> None:
+    """Auto-start LlamaCppBackend if DOJO_AUTO_START_BACKEND=1 and backend is unreachable."""
+    global _backend_instance
+    if await _is_backend_healthy(backend_url):
+        return
+    try:
+        from pathlib import Path as _Path
+        from dojo.serve.llamacpp_backend import LlamaCppBackend
+        _backend_instance = LlamaCppBackend(model_path=_Path(model_id), port=port)
+        _backend_instance.start()
+    except Exception:
+        pass
+
+
+def stop_serving() -> None:
+    """Stop the module-level backend instance if one was started via auto-start."""
+    global _backend_instance
+    if _backend_instance is not None:
+        try:
+            _backend_instance.stop()
+        except Exception:
+            pass
+        _backend_instance = None
 
 
 # ---------------------------------------------------------------------------
@@ -104,30 +154,43 @@ def create_app(backend_url: str, model_id: str, passport_id: str = "") -> Any:
     app = _fastapi.FastAPI(title="DanteDojo OpenAI-Compatible API", version="1.0.0")
     logger = EvidenceLogger.get_instance()
 
+    # Register this model in the loaded-models registry
+    _LOADED_MODELS[model_id] = {
+        "id": model_id,
+        "object": "model",
+        "owned_by": "dantedojo",
+        "passport_id": passport_id,
+    }
+
+    # ------------------------------------------------------------------
+    # Startup: auto-start backend if configured
+    # ------------------------------------------------------------------
+
+    import os as _os
+
+    @app.on_event("startup")
+    async def _startup() -> None:
+        if _os.environ.get("DOJO_AUTO_START_BACKEND", "0") == "1":
+            await _ensure_backend_running(backend_url, model_id)
+
     # ------------------------------------------------------------------
     # GET /health
     # ------------------------------------------------------------------
 
     @app.get("/health")
     async def health():
-        return {"status": "ok", "model": model_id}
+        backend_healthy = await _is_backend_healthy(backend_url)
+        return {"status": "ok", "model": model_id, "backend_healthy": backend_healthy}
 
     # ------------------------------------------------------------------
-    # GET /v1/models
+    # GET /v1/models — lists all models in the registry
     # ------------------------------------------------------------------
 
     @app.get("/v1/models")
     async def list_models():
         return {
             "object": "list",
-            "data": [
-                {
-                    "id": model_id,
-                    "object": "model",
-                    "owned_by": "dantedojo",
-                    "passport_id": passport_id,
-                }
-            ],
+            "data": list(_LOADED_MODELS.values()),
         }
 
     # ------------------------------------------------------------------
@@ -370,4 +433,5 @@ __all__ = [
     "ChatMessage",
     "create_app",
     "run_server",
+    "stop_serving",
 ]

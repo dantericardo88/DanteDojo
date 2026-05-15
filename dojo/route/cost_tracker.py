@@ -13,9 +13,17 @@ from typing import Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import BudgetExceeded
-from dojo.core.types import CostReceipt
+from dojo.core.types import CostReceipt, RoutingOption
 
 _DEFAULT_STORAGE = Path.home() / ".dante" / "cost_receipts.jsonl"
+
+# Cost per 1k tokens by provider key (route_taken value)
+_API_COST_PER_1K: dict[str, float] = {
+    RoutingOption.API_HAIKU.value: 0.00025,
+    RoutingOption.API_SONNET.value: 0.003,
+    RoutingOption.API_DEEPSEEK.value: 0.00014,
+    RoutingOption.API_GPT5_MINI.value: 0.00015,
+}
 
 
 class CostTracker:
@@ -54,6 +62,83 @@ class CostTracker:
             },
             organ="route",
         )
+
+    def record_from_response(
+        self,
+        receipt: CostReceipt,
+        response_tokens: int,
+        prompt_tokens: int,
+    ) -> CostReceipt:
+        """Compute actual cost from real token counts and persist the updated receipt.
+
+        Creates a new CostReceipt with the actual prompt/response token counts
+        and the corresponding cost, then persists it and emits evidence.
+
+        Args:
+            receipt: Original CostReceipt (used for task, route, latency, etc.).
+            response_tokens: Actual output token count from the API response.
+            prompt_tokens: Actual input token count from the API response.
+
+        Returns:
+            A new CostReceipt updated with real token counts and cost.
+        """
+        logger = EvidenceLogger.get_instance()
+        total_tokens = prompt_tokens + response_tokens
+        cost_per_1k = _API_COST_PER_1K.get(receipt.route_taken, 0.0)
+        actual_cost = round((total_tokens / 1000.0) * cost_per_1k, 8)
+
+        updated = CostReceipt(
+            task=receipt.task,
+            route_taken=receipt.route_taken,
+            tokens_in=prompt_tokens,
+            tokens_out=response_tokens,
+            cost_usd=actual_cost,
+            latency_ms=receipt.latency_ms,
+            local_displaced_estimate_usd=receipt.local_displaced_estimate_usd,
+            recorded_at=receipt.recorded_at,
+        )
+
+        self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._storage_path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(updated.to_dict(), separators=(",", ":")) + "\n")
+
+        logger.emit(
+            {
+                "type": EvidenceType.ROUTE_COST_RECEIPT.value,
+                "data": {
+                    **updated.to_dict(),
+                    "actual_tokens": True,
+                    "prompt_tokens": prompt_tokens,
+                    "response_tokens": response_tokens,
+                    "total_tokens": total_tokens,
+                },
+            },
+            organ="route",
+        )
+
+        return updated
+
+    def get_provider_stats(self) -> dict[str, dict]:
+        """Return per-provider aggregated stats across all stored receipts.
+
+        Returns:
+            dict mapping route_taken value → dict with:
+              - total_usd: sum of cost_usd
+              - total_tokens: sum of tokens_in + tokens_out
+              - call_count: number of receipts
+        """
+        receipts = self.load_receipts()
+        stats: dict[str, dict] = {}
+
+        for r in receipts:
+            key = r.route_taken
+            if key not in stats:
+                stats[key] = {"total_usd": 0.0, "total_tokens": 0, "call_count": 0}
+            stats[key]["total_usd"] = round(stats[key]["total_usd"] + r.cost_usd, 8)
+            stats[key]["total_tokens"] += r.tokens_in + r.tokens_out
+            stats[key]["call_count"] += 1
+
+        return stats
 
     def monthly_summary(self, year: int, month: int) -> dict:
         """Return aggregated cost data for the given calendar month.

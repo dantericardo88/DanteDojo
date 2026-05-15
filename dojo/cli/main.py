@@ -23,6 +23,9 @@ import typer
 from rich.console import Console
 from rich.table import Table
 
+from dojo.experiment.tracker import ExperimentTracker
+from dojo.experiment.leaderboard import RunLeaderboard
+
 app = typer.Typer(
     name="dojo",
     help="DanteDojo: sovereign AI training, evaluation, and inference organ.",
@@ -331,7 +334,7 @@ def registry_lookup(
 
 
 # ---------------------------------------------------------------------------
-# Experiment tracking
+# Experiment tracking (legacy single-command alias)
 # ---------------------------------------------------------------------------
 
 experiment_app = typer.Typer(help="Experiment tracking commands.", no_args_is_help=True)
@@ -350,6 +353,88 @@ def experiment_list() -> None:
     t = Table("Run ID", "Name", "Status", "Started")
     for r in runs:
         t.add_row(r.get("run_id", ""), r.get("name", ""), r.get("status", ""), r.get("start_time", ""))
+    console.print(t)
+
+
+# ---------------------------------------------------------------------------
+# experiments subapp  (dojo experiments list / compare / leaderboard)
+# ---------------------------------------------------------------------------
+
+experiments_app = typer.Typer(help="Experiment run management.", no_args_is_help=True)
+app.add_typer(experiments_app, name="experiments")
+
+
+@experiments_app.command("list")
+def experiments_list(
+    experiment: str = typer.Option("", "--experiment", help="Filter by experiment name"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """List all experiment runs, optionally filtered by experiment name."""
+    tracker = ExperimentTracker()
+    runs = tracker.list_runs(experiment)
+    if json_out:
+        typer.echo(json.dumps(runs, indent=2, default=str))
+        return
+    if not runs:
+        console.print("[yellow]No experiment runs recorded.[/yellow]")
+        return
+    t = Table("Run ID", "Name", "Status", "Started")
+    for r in runs:
+        t.add_row(r.get("run_id", ""), r.get("name", ""), r.get("status", ""), r.get("start_time", ""))
+    console.print(t)
+
+
+@experiments_app.command("compare")
+def experiments_compare(
+    run_id_1: str = typer.Argument(..., help="First run ID"),
+    run_id_2: str = typer.Argument(..., help="Second run ID"),
+    metric: str = typer.Option("loss", "--metric", help="Primary metric for ranking"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Compare two experiment runs side-by-side."""
+    lb = RunLeaderboard(primary_metric=metric, higher_is_better=False)
+    lb.add_run(run_id_1, run_id_1, "", {metric: 0.0})
+    lb.add_run(run_id_2, run_id_2, "", {metric: 0.0})
+    result = lb.compare_top_n(n=2)
+    if json_out:
+        typer.echo(json.dumps(result, indent=2, default=str))
+    else:
+        for rid, info in result.items():
+            console.print(f"[bold]{rid}[/bold]  rank={info.get('rank')}  baseline={info.get('baseline_run_id')}")
+
+
+@experiments_app.command("leaderboard")
+def experiments_leaderboard(
+    experiment: str = typer.Option("", "--experiment", help="Experiment name to load runs from"),
+    metric: str = typer.Option("loss", "--metric", help="Primary metric for ranking"),
+    higher_is_better: bool = typer.Option(False, "--higher-is-better", help="Higher metric value = better rank"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Build and display the run leaderboard for an experiment."""
+    tracker = ExperimentTracker()
+    lb = RunLeaderboard.from_tracker(
+        tracker,
+        experiment_name=experiment,
+        primary_metric=metric,
+        higher_is_better=higher_is_better,
+    )
+    d = lb.to_dict()
+    if json_out:
+        typer.echo(json.dumps(d, indent=2, default=str))
+        return
+    entries = d.get("entries", [])
+    if not entries:
+        console.print("[yellow]No runs found.[/yellow]")
+        return
+    t = Table("Rank", "Run ID", "Run Name", "Experiment", metric)
+    for e in entries:
+        t.add_row(
+            str(e.get("rank", "")),
+            e.get("run_id", ""),
+            e.get("run_name", ""),
+            e.get("experiment_name", ""),
+            str(e.get("metrics", {}).get(metric, "")),
+        )
     console.print(t)
 
 

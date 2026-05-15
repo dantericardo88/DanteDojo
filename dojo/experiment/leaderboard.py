@@ -7,10 +7,13 @@ utilities via compare_runs(). All operations emit constitutional evidence.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.experiment.metrics import compare_runs
+
+if TYPE_CHECKING:
+    from dojo.experiment.tracker import ExperimentTracker
 
 
 # ---------------------------------------------------------------------------
@@ -211,6 +214,49 @@ class RunLeaderboard:
         )
 
         return result
+
+
+    # ------------------------------------------------------------------
+    # Class-level factory
+    # ------------------------------------------------------------------
+
+    @classmethod
+    def from_tracker(
+        cls,
+        tracker: "ExperimentTracker",
+        experiment_name: str = "",
+        primary_metric: str = "loss",
+        higher_is_better: bool = False,
+    ) -> "RunLeaderboard":
+        """Build a RunLeaderboard from all runs recorded by an ExperimentTracker.
+
+        Args:
+            tracker: ExperimentTracker whose list_runs() is called.
+            experiment_name: Optional experiment filter passed to list_runs().
+            primary_metric: Metric used to rank entries.
+            higher_is_better: Ranking direction for primary_metric.
+
+        Returns:
+            Populated RunLeaderboard (may be empty if no runs exist).
+        """
+        lb = cls(primary_metric=primary_metric, higher_is_better=higher_is_better)
+        runs = tracker.list_runs(experiment_name)
+        for r in runs:
+            run_id = r.get("run_id", "")
+            run_name = r.get("name", "")
+            metrics: Dict[str, float] = {
+                k: float(v)
+                for k, v in r.items()
+                if k not in {"run_id", "name", "status", "start_time"}
+                and isinstance(v, (int, float))
+            }
+            lb.add_run(
+                run_id=run_id,
+                run_name=run_name,
+                experiment_name=experiment_name,
+                metrics=metrics,
+            )
+        return lb
 
 
 __all__ = [

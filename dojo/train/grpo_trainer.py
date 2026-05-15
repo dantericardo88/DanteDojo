@@ -35,6 +35,8 @@ from dojo.core.exceptions import (
 )
 from dojo.core.one_door import one_door
 from dojo.core.types import HALProfile
+from dojo.experiment.tracker import ExperimentTracker, RunConfig
+from dojo.experiment.wandb_adapter import WandBTrainingCallback
 from dojo.train.base import BaseTrainer, TrainingState
 from dojo.train.checkpoint import CheckpointManager
 from dojo.train.rl_config import GRPOConfig, RLTrainResult
@@ -244,6 +246,11 @@ def _run_trl_grpo(
         save_steps=config.grad_accum_steps * config.num_epochs,
     )
 
+    from dojo.experiment.wandb_adapter import WandBAdapter
+    _wandb_adapter = WandBAdapter(use_wandb=True)
+    _wandb_adapter.init_run(config)
+    _wandb_cb = _wandb_adapter.as_callback()
+
     model = AutoModelForCausalLM.from_pretrained(config.base_model)
     tokenizer = AutoTokenizer.from_pretrained(config.base_model)
     cb = _ConstitutionalGRPOCallback(config, logger)
@@ -260,6 +267,7 @@ def _run_trl_grpo(
     last_log = state.log_history[-1] if (state and state.log_history) else {}
     reward_mean = float(last_log.get("rewards/mean", 0.0))
 
+    _wandb_cb.on_train_end({"final_reward_mean": reward_mean, "steps": float(steps)})
     ckpt_mgr.save(steps, {"reward_mean": reward_mean, "algorithm": "grpo"})
     return steps, reward_mean
 
@@ -291,100 +299,128 @@ def grpo_train(
     trainer = BaseTrainer()
     start_time = time.monotonic()
 
-    # ---- IDLE → PROFILING ------------------------------------------------
-    trainer.transition(TrainingState.PROFILING)
-
-    logger.emit(
-        {
-            "type": EvidenceType.GRPO_START.value,
-            "data": {
-                "config_hash": config.config_hash(),
-                "pack_id": config.pack_id,
-                "hardware_tier": hal_profile.tier.value,
-                "base_model": config.base_model,
-                "reward_model": config.reward_model,
-                "beta": config.beta,
-                "max_kl": config.max_kl,
-                "num_generations": config.num_generations,
-                "algorithm": "grpo",
-            },
-        },
-        organ="grpo",
+    # ---- Experiment tracker setup ----------------------------------------
+    tracking_uri = os.environ.get("DOJO_MLFLOW_URI", "http://127.0.0.1:5000")
+    exp_tracker = ExperimentTracker(tracking_uri=tracking_uri, use_mlflow=True)
+    run_cfg = RunConfig(
+        experiment_name="dojo.grpo",
+        run_name=f"grpo-{config.base_model.replace('/', '-')}",
+        config_hash=config.config_hash(),
+        pack_id=config.pack_id,
+        hardware_tier=hal_profile.tier.value,
+        seed=config.seed,
     )
 
-    # ---- PROFILING → ROUTING ---------------------------------------------
-    trainer.transition(TrainingState.ROUTING)
+    with exp_tracker.run(run_cfg):
+        exp_tracker.log_params({
+            "base_model": config.base_model,
+            "num_epochs": config.num_epochs,
+            "beta": config.beta,
+            "max_kl": config.max_kl,
+            "num_generations": config.num_generations,
+            "learning_rate": config.learning_rate,
+            "hardware_tier": hal_profile.tier.value,
+            "algorithm": "grpo",
+        })
 
-    trl_available = _is_trl_available()
-    real_gpu = _real_gpu_requested()
+        # ---- IDLE → PROFILING ------------------------------------------------
+        trainer.transition(TrainingState.PROFILING)
 
-    logger.emit(
-        {
-            "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
-            "data": {
-                "backend": "trl_grpo",
-                "trl_available": trl_available,
-                "real_gpu_requested": real_gpu,
-                "hardware_tier": hal_profile.tier.value,
-                "algorithm": "grpo",
+        logger.emit(
+            {
+                "type": EvidenceType.GRPO_START.value,
+                "data": {
+                    "config_hash": config.config_hash(),
+                    "pack_id": config.pack_id,
+                    "hardware_tier": hal_profile.tier.value,
+                    "base_model": config.base_model,
+                    "reward_model": config.reward_model,
+                    "beta": config.beta,
+                    "max_kl": config.max_kl,
+                    "num_generations": config.num_generations,
+                    "algorithm": "grpo",
+                },
             },
-        },
-        organ="grpo",
-    )
-
-    # ---- ROUTING → PREPARING --------------------------------------------
-    trainer.transition(TrainingState.PREPARING)
-
-    if real_gpu and not trl_available:
-        raise BackendUnavailable(
-            "TRL is required for GRPO training but is not installed.",
-            reason="pip install trl>=0.8.0",
+            organ="grpo",
         )
 
-    # ---- PREPARING → TRAINING -------------------------------------------
-    trainer.transition(TrainingState.TRAINING)
+        # ---- PROFILING → ROUTING ---------------------------------------------
+        trainer.transition(TrainingState.ROUTING)
 
-    ckpt_dir = config.output_dir / "checkpoints"
-    ckpt_mgr = CheckpointManager(ckpt_dir, max_checkpoints=3)
+        trl_available = _is_trl_available()
+        real_gpu = _real_gpu_requested()
 
-    if real_gpu and trl_available:
-        steps_completed, final_reward = _run_trl_grpo(config, hal_profile, logger, ckpt_mgr)
-    else:
-        steps_completed, final_reward = _run_native_grpo_steps(config, logger, ckpt_mgr)
-
-    if math.isnan(final_reward) or math.isinf(final_reward):
-        trainer.transition(TrainingState.FAILED)
-        raise GRPODivergenceError(
-            f"GRPO reward diverged: final_reward_mean={final_reward}",
-            reason="NaN or Inf in reward signal",
+        logger.emit(
+            {
+                "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
+                "data": {
+                    "backend": "trl_grpo",
+                    "trl_available": trl_available,
+                    "real_gpu_requested": real_gpu,
+                    "hardware_tier": hal_profile.tier.value,
+                    "algorithm": "grpo",
+                },
+            },
+            organ="grpo",
         )
 
-    # ---- TRAINING → CHECKPOINTING ---------------------------------------
-    trainer.transition(TrainingState.CHECKPOINTING)
+        # ---- ROUTING → PREPARING --------------------------------------------
+        trainer.transition(TrainingState.PREPARING)
 
-    # ---- CHECKPOINTING → EVALUATING -------------------------------------
-    trainer.transition(TrainingState.EVALUATING)
+        if real_gpu and not trl_available:
+            raise BackendUnavailable(
+                "TRL is required for GRPO training but is not installed.",
+                reason="pip install trl>=0.8.0",
+            )
 
-    # ---- EVALUATING → COMPLETED -----------------------------------------
-    trainer.transition(TrainingState.COMPLETED)
+        # ---- PREPARING → TRAINING -------------------------------------------
+        trainer.transition(TrainingState.TRAINING)
 
-    wall_time = time.monotonic() - start_time
-    receipt = logger.compute_merkle_root()
+        ckpt_dir = config.output_dir / "checkpoints"
+        ckpt_mgr = CheckpointManager(ckpt_dir, max_checkpoints=3)
 
-    logger.emit(
-        {
-            "type": EvidenceType.GRPO_COMPLETE.value,
-            "data": {
-                "final_reward_mean": round(final_reward, 4),
-                "steps_completed": steps_completed,
-                "wall_time_seconds": wall_time,
-                "backend_used": "trl_grpo" if (real_gpu and trl_available) else "native_pytorch",
-                "algorithm": "grpo",
-                "training_receipt": receipt,
+        if real_gpu and trl_available:
+            steps_completed, final_reward = _run_trl_grpo(config, hal_profile, logger, ckpt_mgr)
+        else:
+            steps_completed, final_reward = _run_native_grpo_steps(config, logger, ckpt_mgr)
+
+        if math.isnan(final_reward) or math.isinf(final_reward):
+            trainer.transition(TrainingState.FAILED)
+            raise GRPODivergenceError(
+                f"GRPO reward diverged: final_reward_mean={final_reward}",
+                reason="NaN or Inf in reward signal",
+            )
+
+        # ---- TRAINING → CHECKPOINTING ---------------------------------------
+        trainer.transition(TrainingState.CHECKPOINTING)
+
+        # ---- CHECKPOINTING → EVALUATING -------------------------------------
+        trainer.transition(TrainingState.EVALUATING)
+
+        # ---- EVALUATING → COMPLETED -----------------------------------------
+        trainer.transition(TrainingState.COMPLETED)
+
+        wall_time = time.monotonic() - start_time
+        receipt = logger.compute_merkle_root()
+
+        exp_tracker.log_metrics_batch(
+            {"final_reward_mean": final_reward, "steps_completed": float(steps_completed), "wall_time_seconds": wall_time}
+        )
+
+        logger.emit(
+            {
+                "type": EvidenceType.GRPO_COMPLETE.value,
+                "data": {
+                    "final_reward_mean": round(final_reward, 4),
+                    "steps_completed": steps_completed,
+                    "wall_time_seconds": wall_time,
+                    "backend_used": "trl_grpo" if (real_gpu and trl_available) else "native_pytorch",
+                    "algorithm": "grpo",
+                    "training_receipt": receipt,
+                },
             },
-        },
-        organ="grpo",
-    )
+            organ="grpo",
+        )
 
     return RLTrainResult(
         adapter_path=config.output_dir,

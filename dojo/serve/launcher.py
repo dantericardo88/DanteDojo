@@ -106,8 +106,11 @@ def launch_server(
     Returns:
         DeploymentManifest describing the running (or stub) server.
     """
+    global _active_backend, _active_fsm
+
     logger = EvidenceLogger.get_instance()
     fsm = LaunchFSM()
+    _active_fsm = fsm
 
     # Phase 1: IDLE → CONFIGURING
     fsm.transition(LaunchState.CONFIGURING)
@@ -215,13 +218,16 @@ def _provision_backend(
     context_length: int,
 ) -> int:
     """Start the backend subprocess and return its PID."""
+    global _active_backend
     if backend == Backend.VLLM:
         from dojo.serve.vllm_backend import VLLMBackend
         b = VLLMBackend(model_path=model_path, profile=profile, port=port, context_length=context_length)
+        _active_backend = b
         return b.start()
     elif backend == Backend.LLAMACPP:
         from dojo.serve.llamacpp_backend import LlamaCppBackend
         b = LlamaCppBackend(model_path=model_path, port=port)
+        _active_backend = b
         return b.start()
     else:
         # MLX_LM, SGLANG — stub for v1
@@ -243,4 +249,46 @@ def _warm_backend(backend: Backend, port: int) -> None:
         pass
 
 
-__all__ = ["LaunchFSM", "LaunchState", "launch_server"]
+# ---------------------------------------------------------------------------
+# Module-level backend instance (for stop_serving cleanup)
+# ---------------------------------------------------------------------------
+
+_active_backend: Optional[object] = None
+_active_fsm: Optional[LaunchFSM] = None
+
+
+def stop_serving() -> None:
+    """Stop the currently running backend and transition FSM to STOPPED.
+
+    Calls backend.stop() if a backend is active, emits SERVE_STOPPED evidence,
+    and resets module-level state.
+    """
+    global _active_backend, _active_fsm
+
+    logger = EvidenceLogger.get_instance()
+
+    if _active_backend is not None:
+        try:
+            _active_backend.stop()  # type: ignore[union-attr]
+        except Exception:
+            pass
+        _active_backend = None
+
+    if _active_fsm is not None:
+        try:
+            _active_fsm.transition(LaunchState.STOPPING)
+            _active_fsm.transition(LaunchState.STOPPED)
+        except Exception:
+            pass
+        _active_fsm = None
+
+    logger.emit(
+        {
+            "type": EvidenceType.SERVE_STOPPED.value,
+            "data": {"source": "stop_serving"},
+        },
+        organ="serve",
+    )
+
+
+__all__ = ["LaunchFSM", "LaunchState", "launch_server", "stop_serving"]

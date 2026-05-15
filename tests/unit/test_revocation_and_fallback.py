@@ -1,6 +1,7 @@
 """Unit tests for d08 (sovereign revocation live check) and d36 (dead provider fallback).
 
 d08 — check_revocation() in dojo/promote/revocation.py
+     — revocation gate wired into promote() in dojo/promote/gate.py
 d36 — dead provider fallback in dojo/route/router.py
 """
 
@@ -17,8 +18,9 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
-from dojo.core.exceptions import PassportRevoked, RoutingProviderUnavailable
-from dojo.core.types import ConstitutionalPassport, PrivacyTier, RoutingOption, RoutingPolicy
+from dojo.core.exceptions import PassportRevoked, PromotionBlocked, RoutingProviderUnavailable
+from dojo.core.types import ConstitutionalPassport, ModelArtifact, PrivacyTier, RoutingOption, RoutingPolicy
+from dojo.promote.gate import GateState, promote
 from dojo.promote.revocation import check_revocation
 from dojo.route import router
 from dojo.route.router import dispatch
@@ -229,3 +231,142 @@ class TestDeadProviderFallback:
         assert EvidenceType.ROUTE_FALLBACK.value in evidence_types, (
             f"Expected {EvidenceType.ROUTE_FALLBACK.value!r} in {evidence_types}"
         )
+
+
+# ---------------------------------------------------------------------------
+# d08 — revocation gate wired into promote()
+# ---------------------------------------------------------------------------
+
+def _make_artifact(revocation_url: str = "") -> ModelArtifact:
+    return ModelArtifact(
+        artifact_id="dojo://test-model/v1",
+        base_model="Qwen/Qwen2.5-7B-Instruct",
+        lora_weights=None,
+        quantization=None,
+        training_receipt="abc123",
+        passport=None,
+        revocation_url=revocation_url,
+    )
+
+
+class TestPromoteRevocationGate:
+    def test_promote_skips_revocation_when_url_empty(self):
+        """promote() with revocation_url='' skips revocation check — no HTTP calls."""
+        artifact = _make_artifact(revocation_url="")
+
+        # If check_revocation were called it would try real network; we assert it's NOT called.
+        with patch("dojo.promote.revocation.check_revocation") as mock_check:
+            passport = promote(
+                artifact,
+                "receipt-valid-001",
+                "deadbeef" * 8,
+                baseline_f1=0.70,
+                candidate_f1=0.80,
+            )
+
+        mock_check.assert_not_called()
+        assert passport is not None
+
+    def test_promote_calls_revocation_when_url_set(self):
+        """promote() with revocation_url set calls check_revocation once."""
+        artifact = _make_artifact(revocation_url="http://127.0.0.1:8002/v1/passport/revoke")
+
+        with patch("dojo.promote.revocation.check_revocation", return_value=False) as mock_check:
+            passport = promote(
+                artifact,
+                "receipt-valid-001",
+                "deadbeef" * 8,
+                baseline_f1=0.70,
+                candidate_f1=0.80,
+            )
+
+        mock_check.assert_called_once()
+        assert passport is not None
+
+    def test_promote_raises_promotion_blocked_on_revocation_failure(self):
+        """promote() raises PromotionBlocked(gate='revocation_check') when revocation raises."""
+        artifact = _make_artifact(revocation_url="http://127.0.0.1:8002/v1/passport/revoke")
+
+        with patch(
+            "dojo.promote.revocation.check_revocation",
+            side_effect=PassportRevoked("Passport revoked", reason="revoked"),
+        ):
+            with pytest.raises(PromotionBlocked) as exc_info:
+                promote(
+                    artifact,
+                    "receipt-valid-001",
+                    "deadbeef" * 8,
+                    baseline_f1=0.70,
+                    candidate_f1=0.80,
+                )
+
+        err = exc_info.value
+        assert err.gate == "revocation_check"
+        assert len(err.reasons) > 0
+
+    def test_promote_fsm_history_includes_revocation_check_state(self):
+        """FSM transitions include REVOCATION_CHECK when revocation_url is set."""
+        artifact = _make_artifact(revocation_url="http://127.0.0.1:8002/v1/passport/revoke")
+
+        with patch("dojo.promote.revocation.check_revocation", return_value=False):
+            promote(
+                artifact,
+                "receipt-valid-001",
+                "deadbeef" * 8,
+                baseline_f1=0.70,
+                candidate_f1=0.80,
+            )
+
+        events = EvidenceLogger.get_events()
+        passport_events = [
+            e for e in events
+            if e.get("type") == EvidenceType.PROMOTE_PASSPORT_ISSUED.value
+        ]
+        assert len(passport_events) == 1
+        history = passport_events[0]["data"]["fsm_history"]
+        state_values = [s for pair in history for s in pair]
+        assert GateState.REVOCATION_CHECK.value in state_values, (
+            f"Expected {GateState.REVOCATION_CHECK.value!r} in FSM history: {history}"
+        )
+
+    def test_promote_passport_issued_evidence_has_revocation_url(self):
+        """PROMOTE_PASSPORT_ISSUED evidence includes revocation_url field."""
+        url = "http://127.0.0.1:8002/v1/passport/revoke"
+        artifact = _make_artifact(revocation_url=url)
+
+        with patch("dojo.promote.revocation.check_revocation", return_value=False):
+            promote(
+                artifact,
+                "receipt-valid-001",
+                "deadbeef" * 8,
+                baseline_f1=0.70,
+                candidate_f1=0.80,
+            )
+
+        events = EvidenceLogger.get_events()
+        passport_events = [
+            e for e in events
+            if e.get("type") == EvidenceType.PROMOTE_PASSPORT_ISSUED.value
+        ]
+        assert len(passport_events) == 1
+        assert passport_events[0]["data"]["revocation_url"] == url
+
+    def test_promote_no_url_passport_issued_evidence_revocation_url_is_none(self):
+        """PROMOTE_PASSPORT_ISSUED evidence has revocation_url=None when no URL set."""
+        artifact = _make_artifact(revocation_url="")
+
+        passport = promote(
+            artifact,
+            "receipt-valid-001",
+            "deadbeef" * 8,
+            baseline_f1=0.70,
+            candidate_f1=0.80,
+        )
+
+        events = EvidenceLogger.get_events()
+        passport_events = [
+            e for e in events
+            if e.get("type") == EvidenceType.PROMOTE_PASSPORT_ISSUED.value
+        ]
+        assert len(passport_events) == 1
+        assert passport_events[0]["data"]["revocation_url"] is None
