@@ -248,6 +248,91 @@ class LocalRegistryStore:
         """
         return self._artifact_path(artifact_id).exists()
 
+    def list_artifact_details(self) -> List[Dict[str, Any]]:
+        """Return structured metadata for every artifact in the registry.
+
+        Each entry contains:
+            artifact_id  — the canonical artifact ID string
+            model_name   — base_model field from the manifest
+            version      — last path component of artifact_id (after "/") or ""
+            registered_at — ISO-8601 created_at from the manifest, or ""
+
+        Corrupt manifests are silently skipped (consistent with list_artifacts).
+
+        Returns:
+            List of dicts sorted by artifact_id.
+        """
+        if not self._dir.exists():
+            return []
+
+        entries: List[Dict[str, Any]] = []
+        for json_file in self._dir.glob("*.json"):
+            try:
+                with json_file.open("r", encoding="utf-8") as fh:
+                    manifest = json.load(fh)
+                artifact_id = manifest.get("artifact_id", "")
+                if not artifact_id:
+                    continue
+                base_model: str = manifest.get("base_model", "")
+                # Extract version as the last "/" segment of the artifact_id.
+                version = artifact_id.rsplit("/", 1)[-1] if "/" in artifact_id else ""
+                registered_at: str = str(manifest.get("created_at", ""))
+                entries.append(
+                    {
+                        "artifact_id": artifact_id,
+                        "model_name": base_model,
+                        "version": version,
+                        "registered_at": registered_at,
+                    }
+                )
+            except Exception:
+                pass  # Skip corrupt manifests
+
+        return sorted(entries, key=lambda e: e["artifact_id"])
+
+    def integrity_check(self) -> Dict[str, int]:
+        """Scan all manifests and verify structural consistency.
+
+        For each ``.json`` file in the registry directory:
+        - **healthy**: manifest loads cleanly and artifact_id is non-empty.
+        - **corrupt**: file exists but cannot be parsed or is missing required fields.
+        - **missing**: artifact_id present but the expected manifest path does not
+          match the actual file (i.e. the stored artifact_id maps to a different
+          filename than where it was found).
+
+        Returns:
+            Dict with keys ``total``, ``healthy``, ``corrupt``, ``missing``.
+        """
+        if not self._dir.exists():
+            return {"total": 0, "healthy": 0, "corrupt": 0, "missing": 0}
+
+        total = healthy = corrupt = missing = 0
+
+        for json_file in self._dir.glob("*.json"):
+            total += 1
+            try:
+                with json_file.open("r", encoding="utf-8") as fh:
+                    manifest = json.load(fh)
+                artifact_id = manifest.get("artifact_id", "")
+                if not artifact_id:
+                    corrupt += 1
+                    continue
+                # Verify the canonical path for this artifact_id matches the file.
+                expected_path = self._artifact_path(artifact_id)
+                if expected_path.resolve() != json_file.resolve():
+                    missing += 1
+                else:
+                    healthy += 1
+            except Exception:
+                corrupt += 1
+
+        return {
+            "total": total,
+            "healthy": healthy,
+            "corrupt": corrupt,
+            "missing": missing,
+        }
+
 
 __all__ = [
     "LocalRegistryStore",

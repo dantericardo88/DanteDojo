@@ -105,6 +105,8 @@ class FinetuneConfig:
     warmup_ratio: float = 0.03
     seed: int = 42
     output_dir: Path = field(default_factory=lambda: Path("artifacts/train_run"))
+    # Precision / training mode: "sft", "qlora", "fp8", "bf16"
+    training_mode: str = "sft"
 
     # ------------------------------------------------------------------
     # Helpers
@@ -125,6 +127,7 @@ class FinetuneConfig:
             "warmup_ratio": self.warmup_ratio,
             "seed": self.seed,
             "output_dir": str(self.output_dir),
+            "training_mode": self.training_mode,
         }
 
     def config_hash(self) -> str:
@@ -161,8 +164,40 @@ class FinetuneResult:
         }
 
 
+@dataclass(frozen=True)
+class FSDP2Config:
+    """Configuration overlay for FSDP2 multi-GPU training."""
+
+    sharding_strategy: str = "FULL_SHARD"
+    world_size: int = 0           # 0 = auto-detect from torch.cuda.device_count()
+    backend: str = "nccl"
+    cpu_offload_params: bool = False
+    cpu_offload_activations: bool = False
+    transformer_layer_cls: str = "LlamaDecoderLayer"
+    use_orig_params: bool = True
+    activation_checkpointing: bool = False
+
+    def config_hash(self) -> str:
+        payload = json.dumps(
+            {
+                "sharding_strategy": self.sharding_strategy,
+                "world_size": self.world_size,
+                "backend": self.backend,
+                "cpu_offload_params": self.cpu_offload_params,
+                "cpu_offload_activations": self.cpu_offload_activations,
+                "transformer_layer_cls": self.transformer_layer_cls,
+                "use_orig_params": self.use_orig_params,
+                "activation_checkpointing": self.activation_checkpointing,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(payload.encode()).hexdigest()
+
+
 __all__ = [
     "BaseTrainer",
+    "FSDP2Config",
     "FinetuneConfig",
     "FinetuneResult",
     "TrainingState",

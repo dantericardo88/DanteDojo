@@ -1,0 +1,177 @@
+{
+  "_meta": {
+    "version": "1.2.0",
+    "generated": "2026-05-15",
+    "project": "DanteDojo",
+    "note": "Inspector regrade 2026-05-15: 11 dimensions re-evaluated via direct code inspection. Net +19 pts (292→311). 9 dimensions upgraded (found real implementations missed by self-scoring), 2 downgraded (found literal stub comments + hardcoded return values). Rankings updated.",
+    "harsh_regrade_summary": {
+      "date": "2026-05-14",
+      "dimensions_downgraded": 13,
+      "old_raw_total": 319,
+      "new_raw_total": 292,
+      "old_pct": 63.8,
+      "new_pct": 58.4,
+      "downgrade_reasons": {
+        "d08": "7→4: revocation_url is a struct field; DanteAgents not built; no runtime check",
+        "d09": "8→6: SM detection tested on mock torch only; real CUDA enumeration untested",
+        "d11": "7→5: BF16 wired but DOJO_REAL_GPU-gated; own methodology caps wired-not-GPU-tested at 5",
+        "d13": "8→5: quality gate fires only when quant runs; GPTQ/AWQ are themselves at 3; currently theoretical",
+        "d20": "9→7: daemon infrastructure solid but calls DOJO_REAL_GPU-gated training (d16=4, d17=4)",
+        "d21": "8→7: hash-check tested against fixtures only; no real corpus",
+        "d26": "8→5: WeightStreamer unit-tested in isolation; no real inference loop (d29=3 placeholder)",
+        "d27": "7→5: KVCacheStreamer same gap as d26",
+        "d28": "8→5: PrefetchGovernor unit tested. No real serving layer. Same structural gap as d26/d27.",
+        "d32": "7→6: routing logic wired; zero real provider API calls tested",
+        "d36": "8→6: fallback tested in mock; no real provider failover validated",
+        "d41": "7→5: fallback for an already-strong tool (d37=9); low strategic value",
+        "d49": "8→7: train/serve commands DOJO_REAL_GPU-gated or placeholder; CLI smoke test would fail fresh"
+      }
+    },
+    "inspector_regrade_summary": {
+      "date": "2026-05-15",
+      "dimensions_upgraded": 9,
+      "dimensions_downgraded": 2,
+      "net_point_change": 19,
+      "old_raw_total": 292,
+      "new_raw_total": 311,
+      "old_pct": 58.4,
+      "new_pct": 62.2,
+      "inspector_changes": {
+        "d08": "4→5: check_revocation() in dojo/promote/revocation.py is a real urllib GET + JSON parse + PassportRevoked raise. Not a string field.",
+        "d15": "2→5: Real @triton.jit FlashAttention-2 kernel in dojo/kernels/attention.py with tiled outer/inner loops, online softmax, causal masking. Not absent.",
+        "d22": "3→2: dojo/quant/gptq.py has literal '# v1 stub' comment; _measure_ppl returns hardcoded (25.0, 26.2) even in DOJO_REAL_GPU=1 mode. Downgraded.",
+        "d23": "3→2: dojo/quant/awq.py docstring says 'v1: stubs the export'; _measure_f1 returns hardcoded (0.88, 0.872). Downgraded.",
+        "d29": "3→5: dojo/serve/openai_compat.py is a complete FastAPI proxy with /v1/chat/completions (streaming SSE), /v1/models, /health. Not a placeholder.",
+        "d30": "2→4: dojo/serve/llamacpp_backend.py has real subprocess management: start/health_check/stop with SIGTERM. Limited to 4 because d24=2 (no GGUF to load).",
+        "d35": "3→5: dojo/route/cost_tracker.py is a real CostTracker with JSONL persistence, monthly_summary(), check_budget(), BudgetExceeded. Not 'just a field'.",
+        "d42": "4→6: dojo/experiment/tracker.py is complete ExperimentTracker with MLflow + in-memory fallback, start_run/log_params/log_metrics/log_artifact/list_runs.",
+        "d43": "4→6: Same file as d42. Full run logging wired with evidence emission.",
+        "d44": "2→5: dojo/experiment/leaderboard.py has RunLeaderboard with add_run/rank/best/compare_top_n. Not '2 with minimal comparison'.",
+        "d45": "1→5: dojo/experiment/wandb_adapter.py has WandBAdapter + WandBTrainingCallback. Not absent — old score was factually wrong."
+      }
+    }
+  },
+  "category_totals": {
+    "dante_dojo":    { "cat_a": 68, "cat_b": 36, "cat_c": 40, "cat_d": 13, "cat_e": 26, "cat_f": 35, "cat_g": 40, "cat_h": 22, "cat_i": 31, "raw_total": 311 },
+    "axolotl":       { "cat_a":  3, "cat_b": 34, "cat_c": 27, "cat_d": 19, "cat_e": 15, "cat_f":  0, "cat_g":  7, "cat_h": 24, "cat_i": 24, "raw_total": 153 },
+    "unsloth":       { "cat_a":  2, "cat_b": 32, "cat_c": 21, "cat_d": 21, "cat_e": 14, "cat_f":  0, "cat_g":  5, "cat_h": 20, "cat_i": 23, "raw_total": 138 },
+    "llamafactory":  { "cat_a":  3, "cat_b": 33, "cat_c": 28, "cat_d": 21, "cat_e": 18, "cat_f":  0, "cat_g":  8, "cat_h": 24, "cat_i": 25, "raw_total": 160 },
+    "ollama":        { "cat_a":  2, "cat_b": 13, "cat_c":  0, "cat_d": 12, "cat_e": 22, "cat_f": 14, "cat_g":  2, "cat_h":  0, "cat_i": 31, "raw_total":  96 },
+    "litellm":       { "cat_a":  5, "cat_b":  0, "cat_c":  0, "cat_d":  0, "cat_e": 13, "cat_f": 33, "cat_g":  0, "cat_h": 17, "cat_i": 15, "raw_total":  83 },
+    "openai_ft":     { "cat_a":  3, "cat_b": 31, "cat_c": 24, "cat_d":  6, "cat_e": 17, "cat_f": 15, "cat_g": 14, "cat_h": 20, "cat_i": 26, "raw_total": 156 },
+    "vertex_ai":     { "cat_a":  3, "cat_b": 34, "cat_c": 26, "cat_d": 15, "cat_e": 18, "cat_f": 17, "cat_g": 16, "cat_h": 29, "cat_i": 27, "raw_total": 185 },
+    "together_ai":   { "cat_a":  3, "cat_b": 29, "cat_c": 25, "cat_d":  9, "cat_e": 17, "cat_f": 19, "cat_g": 11, "cat_h": 20, "cat_i": 25, "raw_total": 158 },
+    "modal":         { "cat_a":  2, "cat_b": 22, "cat_c":  8, "cat_d":  9, "cat_e": 14, "cat_f": 12, "cat_g":  2, "cat_h": 13, "cat_i": 16, "raw_total":  98 }
+  },
+  "rankings": [
+    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 311, "pct": 62.2, "moat": "Constitutional sovereignty moat intact (cat_a=68/80, 85%). GRPO+DPO RL trainers (d18/d19=9), FSDP2 (d14=9), lm-eval harness (d37=9), Merkle eval receipt (d40=9), contamination detection (d38=9). Inspector regrade +19 pts vs prior regrade. Lead over #2 now 126 pts." },
+    { "rank": 2,  "competitor": "vertex_ai",    "raw_total": 185, "pct": 37.0, "moat": "Managed scale + Experiments tracking. cat_h=29 best-in-class." },
+    { "rank": 3,  "competitor": "llamafactory", "raw_total": 160, "pct": 32.0, "moat": "Broadest algorithm coverage (SFT+DPO+PPO+ORPO). Best all-in-one OSS." },
+    { "rank": 4,  "competitor": "together_ai",  "raw_total": 158, "pct": 31.6, "moat": "Cloud-scale SFT + OpenAI-compatible API. Llama/Mistral focus." },
+    { "rank": 5,  "competitor": "openai_ft",    "raw_total": 156, "pct": 31.2, "moat": "GPT-4o fine-tuning + ecosystem. Ecosystem (26) and cloud infra." },
+    { "rank": 6,  "competitor": "axolotl",      "raw_total": 153, "pct": 30.6, "moat": "Multi-GPU FSDP2 at 70B+ scale. Best OSS multi-GPU training." },
+    { "rank": 7,  "competitor": "unsloth",      "raw_total": 138, "pct": 27.6, "moat": "Custom CUDA kernels. Fastest single-GPU QLoRA (d15=10)." },
+    { "rank": 8,  "competitor": "modal",        "raw_total":  98, "pct": 19.6, "moat": "GPU cloud platform. Multi-GPU available. Recipes not native." },
+    { "rank": 9,  "competitor": "ollama",       "raw_total":  96, "pct": 19.2, "moat": "Best local UX (d30=10). Ecosystem (31) strong. Inference-only." },
+    { "rank": 10, "competitor": "litellm",      "raw_total":  83, "pct": 16.6, "moat": "Best-in-class routing (d32=10) and cost tracking (d35=9). Routing-only." }
+  ],
+  "dante_dojo_analysis": {
+    "note": "Post-inspector-regrade 2026-05-15. Constitutional moat intact and strengthened. cat_h now 22/40 (55%) after WandBAdapter and RunLeaderboard were found to actually exist. Biggest structural exposure: quantization (d22/d23=2 each — pure stubs with hardcoded return values) and GGUF gap (d24=2).",
+    "genuine_moat_dimensions": [
+      "d01 (one-door): 9 vs best competitor 0 — UNIQUE",
+      "d02 (merkle evidence): 9 vs best competitor 0 — UNIQUE",
+      "d03 (FSM): 9 vs best competitor 0 — UNIQUE",
+      "d05 (DOJO_BYPASS): 9 vs best competitor 0 — UNIQUE",
+      "d06 (privacy tier): 9 vs best competitor 2 (LiteLLM) — DOMINANT",
+      "d07 (constitutional passport): 9 vs best competitor 0 — UNIQUE",
+      "d18 (GRPO constitutional RL): 9 vs best competitor 5 (LlamaFactory) — DOMINANT; only one with per-step KL evidence + KLExplosionError",
+      "d19 (DPO constitutional RL): 9 vs best competitor 6 (LlamaFactory) — DOMINANT; per-step reward-margin evidence + DPORewardCollapse guard",
+      "d20 (idle-time GPU training daemon): 7 vs best competitor 0 — UNIQUE (daemon real, GPU training gated)",
+      "d21 (contamination detection): 7 vs best competitor 3 — DOMINANT",
+      "d26 (single-layer VRAM streaming): 5 vs best competitor 0 — ACADEMIC MOAT (math correct; no real serving loop)",
+      "d27 (KV-cache streaming): 5 vs best competitor 0 — ACADEMIC MOAT",
+      "d28 (prefetch governor): 5 vs best competitor 0 — ACADEMIC MOAT",
+      "d33 (privacy-tier routing): 9 vs best competitor 2 — DOMINANT",
+      "d34 (local-specialist routing): 9 vs best competitor 5 — DOMINANT",
+      "d37 (real lm-eval harness, Merkle-stamped): 9 vs best competitor 6 (Vertex) — unique constitutional chain",
+      "d38 (eval-gold contamination): 9 vs best competitor 0 — UNIQUE",
+      "d39 (judge agreement gate): 8 vs best competitor 5 — DOMINANT",
+      "d40 (merkle eval receipt): 9 vs best competitor 0 — UNIQUE"
+    ],
+    "critical_gaps": [
+      "d22/d23 (GPTQ/AWQ stubs): 2 each — Literal '# v1 stub' comments + hardcoded PPL/F1 return values. Competitors at 6-7. No real quantization at all.",
+      "d24 (GGUF conversion): 2 — Ollama=9, Unsloth=8. Zero sovereign local deployment path. BLOCKS d30 from reaching full credit.",
+      "d16 (SFT GPU-tested): 4 — LlamaFactory=9. Core training is untested on real hardware. Credibility gap.",
+      "d17 (QLoRA GPU-tested): 4 — LlamaFactory=8, Unsloth=9. Same as d16.",
+      "d15 (Triton kernels integration): 5 — Unsloth=10. Kernel infrastructure exists but not integrated into QLoRA training path.",
+      "d31 (vLLM): 2 — Vertex=9, Together=8. No vLLM integration at all."
+    ],
+    "resolved_gaps": [
+      "d14 (multi-GPU FSDP2): 1 → 9 — Constitutional FSDP2 engine with per-rank Merkle evidence. Novel.",
+      "d18 (GRPO/PPO): 2 → 9 — TRL GRPOTrainer + per-step KL evidence + KLExplosionError guard. 43 tests.",
+      "d19 (DPO): 2 → 9 — TRL DPOTrainer + reward-margin evidence + DPORewardCollapse guard. 43 tests.",
+      "d20 (idle-time GPU daemon): 3 → 7 — Infrastructure solid (FSM/NVML/checkpoints/evidence). Harsh cap: GPU training itself not yet validated.",
+      "d37 (real lm-eval harness): 3 → 9 — 8-task catalog, peft= loading, Merkle-stamped receipt into promotion gate.",
+      "d42/d43 (MLflow experiment tracking): 4 → 6 — Complete ExperimentTracker + in-memory fallback. Inspector found real implementation.",
+      "d44 (run leaderboard): 2 → 5 — RunLeaderboard with rank/compare_top_n found in dojo/experiment/leaderboard.py.",
+      "d45 (W&B support): 1 → 5 — WandBAdapter + WandBTrainingCallback found in dojo/experiment/wandb_adapter.py. Old score was factually wrong."
+    ],
+    "cat_score_vs_max": {
+      "cat_a_constitutional": "68/80 = 85.0% — dominant",
+      "cat_b_hardware": "36/70 = 51.4% — Triton kernel exists but not integrated into training",
+      "cat_c_training": "40/60 = 66.7% — GRPO+DPO+FSDP2 strong; SFT/QLoRA GPU-untested is the drag",
+      "cat_d_quantization": "13/40 = 32.5% — weakest by raw score; d22/d23 are pure stubs",
+      "cat_e_serving": "26/60 = 43.3% — FastAPI proxy and llamacpp runner exist; d24=2 blocks full credit",
+      "cat_f_routing": "35/50 = 70.0% — strong; privacy+local routing dominant",
+      "cat_g_evaluation": "40/50 = 80.0% — excellent; lm-eval+Merkle+contamination dominant",
+      "cat_h_experiment_tracking": "22/40 = 55.0% — improved (was 11/40=27.5%); wire into training loops for 8-9",
+      "cat_i_ecosystem": "31/50 = 62.0% — registry/pack strong; community=1 is anchor"
+    }
+  },
+  "next_4_priority_dimensions": [
+    {
+      "priority": 1,
+      "dimension_ids": ["d22", "d23"],
+      "name": "Real GPTQ + AWQ quantization (remove literal stubs)",
+      "current_scores": { "d22": 2, "d23": 2 },
+      "best_competitor": { "d22": "LlamaFactory=7, Unsloth=7", "d23": "LlamaFactory=7, Unsloth=6" },
+      "gap_points": 10,
+      "why": "Both quantization modules contain literal '# v1 stub' comments and hardcoded return values (gptq.py: _measure_ppl returns (25.0, 26.2); awq.py: _measure_f1 returns (0.88, 0.872)) even in DOJO_REAL_GPU=1 mode. The gate scaffolding and evidence emission are real; the quantization itself is entirely absent. Installing gptqmodel + autoawq and wiring real forward passes would take these from 2→7 each. These are also prerequisites for d13 (quality gate) to have any practical meaning beyond theory.",
+      "effort": "medium",
+      "unblocks": ["d13 (quality gate becomes real)", "d24 path (GGUF from quantized model)"]
+    },
+    {
+      "priority": 2,
+      "dimension_ids": ["d24", "d30"],
+      "name": "GGUF conversion + local model runner (sovereign deploy loop)",
+      "current_scores": { "d24": 2, "d30": 4 },
+      "best_competitor": { "d24": "Unsloth=8, Ollama=9", "d30": "Ollama=10" },
+      "gap_points": 15,
+      "why": "A model that has been FSDP2-scaled, promoted through the constitutional passport, and lm-eval-validated has nowhere sovereign to run. The llamacpp_backend.py runner (d30=4) is fully wired with subprocess management; it just has nothing to load because d24=2. GGUF export closes this loop entirely. Constitutional bonus: GGUF metadata can carry passport ID for provenance at inference time. This also turns d26/d27/d28 streaming from academic moats into live sovereignty — those three can jump from 5→8 once a real inference loop runs them.",
+      "effort": "medium",
+      "unblocks": ["d26 → 8", "d27 → 8", "d28 → 8", "d30 → 8"]
+    },
+    {
+      "priority": 3,
+      "dimension_ids": ["d16", "d17"],
+      "name": "SFT + QLoRA real GPU tested (core training credibility)",
+      "current_scores": { "d16": 4, "d17": 4 },
+      "best_competitor": { "d16": "LlamaFactory=9, Axolotl=9", "d17": "Unsloth=9, LlamaFactory=8" },
+      "gap_points": 18,
+      "why": "DanteDojo claims to be a 'sovereign AI training organ' but scores 4/10 on its core training verbs. RTX 4060 Ti 16GB is available hardware. A successful 7B SFT on real GPU moves d16/d17 to 7-8 and unlocks d20 (idle daemon) to demonstrate actual value. Every other training dimension (GRPO, DPO, FSDP2) is more credible once basic SFT is proven on real hardware. Also unblocks d11/d13 from 'theoretical' to 'validated'.",
+      "effort": "medium",
+      "unblocks": ["d20 (full credit)", "d10", "d11", "d13"]
+    },
+    {
+      "priority": 4,
+      "dimension_ids": ["d42", "d43", "d44", "d45"],
+      "name": "Wire experiment tracking into training loops (cat_h 55% → 85%)",
+      "current_scores": { "d42": 6, "d43": 6, "d44": 5, "d45": 5 },
+      "best_competitor": { "d42": "Vertex=9, Axolotl=7", "d43": "Vertex=9", "d44": "Vertex=8", "d45": "Axolotl=5, LlamaFactory=5" },
+      "gap_points": 15,
+      "why": "ExperimentTracker, RunLeaderboard, and WandBAdapter all exist with complete implementations — the inspector regrade confirmed this. The gap from 6 to 9 is purely integration: wire ExperimentTracker.run() into SFT/GRPO/DPO training loops (2-3 lines per trainer), wire WandBTrainingCallback into those same loops, expose 'dojo experiments compare' in CLI, and test against a real MLflow server. No GPU required. Estimated cat_h jump: 22→34/40 (85%). These are the highest-leverage no-GPU improvements remaining.",
+      "effort": "low",
+      "unblocks": ["cat_h 55% → 85%", "d49 CLI (add experiments compare command)"]
+    }
+  ]
+}

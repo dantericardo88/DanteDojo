@@ -1,7 +1,8 @@
 """dojo/hal/nvidia.py — NVIDIA GPU hardware detector.
 
-Detects CUDA-capable NVIDIA GPUs via pynvml and returns a signed HALProfile.
-Returns None (never raises) if pynvml is absent or no CUDA device is present.
+Detects CUDA-capable NVIDIA GPUs via pynvml (primary) or torch.cuda (fallback)
+and returns a signed HALProfile.  Returns None (never raises) if neither
+backend is available or no CUDA device is present.
 """
 
 from __future__ import annotations
@@ -36,22 +37,11 @@ def _tier_from_name(name: str, vram_bytes: int) -> HardwareTier:
 
 
 # ---------------------------------------------------------------------------
-# Public API
+# pynvml backend
 # ---------------------------------------------------------------------------
 
-def detect_nvidia() -> Optional[HALProfile]:
-    """Detect the primary NVIDIA GPU and return a signed HALProfile.
-
-    Detection steps:
-    1. Import pynvml — return None if missing.
-    2. Call nvmlInit() — return None on failure.
-    3. Read device 0: name, memory, compute capability.
-    4. Determine tier, fp8/fp4 native support, driver version.
-    5. Sign the profile and emit evidence.
-
-    Returns:
-        A fully populated, signed HALProfile, or None if no NVIDIA GPU is found.
-    """
+def _detect_via_pynvml() -> Optional[HALProfile]:
+    """Primary path: use pynvml for full GPU info."""
     try:
         import pynvml  # type: ignore[import-not-found]
     except ImportError:
@@ -96,12 +86,8 @@ def detect_nvidia() -> Optional[HALProfile]:
     # Tier
     tier = _tier_from_name(gpu_name, vram_bytes)
 
-    # Build profile (profile_sha256 is seeded with empty string; we sign after)
     import hashlib, json, datetime
 
-    # We need to compute the hash over the profile dict *without* a real sha256
-    # first, then re-sign.  Use a two-pass approach: construct a temporary dict,
-    # sign it, then construct the real profile.
     _tmp_dict = {
         "tier": tier.value,
         "gpu_name": gpu_name,
@@ -167,6 +153,7 @@ def detect_nvidia() -> Optional[HALProfile]:
                     "gpu_name": gpu_name,
                     "tier": tier.value,
                     "compute_capability": compute_capability,
+                    "sm_version": f"SM {cc_major}.{cc_minor}",
                     "profile_sha256": final_sha,
                 },
             },
@@ -176,6 +163,114 @@ def detect_nvidia() -> Optional[HALProfile]:
         pass
 
     return profile
+
+
+# ---------------------------------------------------------------------------
+# torch.cuda fallback backend
+# ---------------------------------------------------------------------------
+
+def _detect_via_torch() -> Optional[HALProfile]:
+    """Fallback: use torch.cuda when pynvml is unavailable."""
+    try:
+        import torch  # type: ignore[import-not-found]
+        if not torch.cuda.is_available():
+            return None
+        major, minor = torch.cuda.get_device_capability(0)
+        compute_capability = f"{major}.{minor}"
+        cc_float = float(compute_capability)
+        gpu_name = torch.cuda.get_device_name(0)
+        # total_memory returns bytes
+        vram_bytes = torch.cuda.get_device_properties(0).total_memory
+
+        has_native_fp8 = cc_float >= 8.9
+        has_native_fp4 = cc_float >= 10.0
+        tier = _tier_from_name(gpu_name, vram_bytes)
+
+        # Sign profile
+        import hashlib, json
+        _tmp = {
+            "tier": tier.value,
+            "gpu_name": gpu_name,
+            "vram_bytes": vram_bytes,
+            "compute_capability": compute_capability,
+            "has_native_fp8": has_native_fp8,
+        }
+        sha = hashlib.sha256(json.dumps(_tmp, sort_keys=True).encode()).hexdigest()
+
+        profile = HALProfile(
+            tier=tier,
+            gpu_name=gpu_name,
+            vram_bytes=vram_bytes,
+            compute_capability=compute_capability,
+            has_native_fp8=has_native_fp8,
+            has_native_fp4=has_native_fp4,
+            has_nvlink=False,
+            pcie_gen=0,
+            interconnect_bandwidth_gb_s=0.0,
+            memory_bandwidth_gb_s=0.0,
+            driver_version="torch_fallback",
+            profile_sha256=sha,
+        )
+
+        # Re-sign with proper profile fields
+        from dojo.hal.profile import sign_profile
+        final_sha = sign_profile(profile)
+
+        profile = HALProfile(
+            tier=tier,
+            gpu_name=gpu_name,
+            vram_bytes=vram_bytes,
+            compute_capability=compute_capability,
+            has_native_fp8=has_native_fp8,
+            has_native_fp4=has_native_fp4,
+            has_nvlink=False,
+            pcie_gen=0,
+            interconnect_bandwidth_gb_s=0.0,
+            memory_bandwidth_gb_s=0.0,
+            driver_version="torch_fallback",
+            profile_sha256=final_sha,
+        )
+
+        from dojo.core.evidence import EvidenceLogger, EvidenceType
+        logger = EvidenceLogger.get_instance()
+        logger.emit(
+            {
+                "type": EvidenceType.HAL_DETECT_FOUND.value,
+                "data": {
+                    "backend": "nvidia_torch",
+                    "gpu_name": gpu_name,
+                    "compute_capability": compute_capability,
+                    "sm_version": f"SM {major}.{minor}",
+                    "has_native_fp8": has_native_fp8,
+                    "profile_sha256": final_sha,
+                },
+            },
+            organ="hal",
+        )
+
+        return profile
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# Public API
+# ---------------------------------------------------------------------------
+
+def detect_nvidia() -> Optional[HALProfile]:
+    """Detect the primary NVIDIA GPU and return a signed HALProfile.
+
+    Detection steps:
+    1. Try pynvml — full GPU info including driver version.
+    2. Fall back to torch.cuda — compute capability, name, VRAM.
+
+    Returns:
+        A fully populated, signed HALProfile, or None if no NVIDIA GPU is found.
+    """
+    result = _detect_via_pynvml()
+    if result is not None:
+        return result
+    return _detect_via_torch()
 
 
 __all__ = ["detect_nvidia"]

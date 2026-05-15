@@ -14,8 +14,7 @@ Covers:
 from __future__ import annotations
 
 import json
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -24,7 +23,6 @@ from dojo.idle.accumulator import GradientAccumulator
 from dojo.idle.detector import IdleDetector
 from dojo.idle.guardian import PowerGuard, ThermalGuard
 from dojo.idle.resource import ResourceGuard
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -112,6 +110,23 @@ class TestIdleDetector:
             and EvidenceType.IDLE_WINDOW_DETECTED.value in e.get("type", "")
         ]
         assert len(idle_events) == 0
+
+    def test_idle_interrupted_evidence_emitted_on_idle_to_active(self):
+        """Evidence emitted when state transitions from idle to active."""
+        detector = IdleDetector(threshold_seconds=60)
+        with patch.object(detector, "seconds_since_last_input", return_value=120.0):
+            detector.is_idle()
+        with patch.object(detector, "seconds_since_last_input", return_value=1.0):
+            detector.is_idle()
+
+        from dojo.core.evidence import EvidenceType
+        events = EvidenceLogger.get_events()
+        interrupted_events = [
+            e for e in events
+            if isinstance(e.get("type"), str)
+            and EvidenceType.IDLE_INTERRUPTED.value in e.get("type", "")
+        ]
+        assert len(interrupted_events) >= 1
 
     def test_custom_threshold_respected(self):
         detector = IdleDetector(threshold_seconds=120)
@@ -281,6 +296,20 @@ class TestResourceGuard:
         result = guard.check_vram_available(required_bytes=1)
         assert isinstance(result, bool)
 
+    def test_check_vram_available_false_when_nvml_required_but_missing(self):
+        """Idle daemon mode can fail closed when NVML telemetry is unavailable."""
+        guard = ResourceGuard(allow_no_nvml=False)
+        import builtins
+        original_import = builtins.__import__
+
+        def mock_import(name, *args, **kwargs):  # type: ignore[no-untyped-def]
+            if name == "pynvml":
+                raise ImportError("pynvml not installed")
+            return original_import(name, *args, **kwargs)
+
+        with patch("builtins.__import__", side_effect=mock_import):
+            assert guard.check_vram_available(required_bytes=1) is False
+
     def test_vram_reserve_bytes_constant(self):
         assert ResourceGuard.VRAM_RESERVE_BYTES == 512 * 1024 * 1024
 
@@ -382,6 +411,12 @@ class TestGradientAccumulator:
         with pytest.raises(ValueError):
             accum2.load_state(path)
 
+    def test_restore_state_sets_checkpoint_position(self):
+        accum = GradientAccumulator(accum_steps=4)
+        accum.restore_state(current_step=9, accumulated=2)
+        assert accum.current_step == 9
+        assert accum.accumulated == 2
+
     def test_save_state_json_contains_expected_keys(self, tmp_path):
         accum = GradientAccumulator(accum_steps=8)
         path = tmp_path / "state.json"
@@ -406,3 +441,179 @@ class TestGradientAccumulator:
     def test_invalid_accum_steps_raises(self):
         with pytest.raises(ValueError):
             GradientAccumulator(accum_steps=0)
+
+
+# ---------------------------------------------------------------------------
+# IdleTrainingDaemon
+# ---------------------------------------------------------------------------
+
+class _SequenceIdleDetector:
+    def __init__(self, states):
+        self._states = list(states)
+        self.calls = 0
+
+    def is_idle(self):
+        self.calls += 1
+        if self._states:
+            return self._states.pop(0)
+        return False
+
+
+class _StaticResourceGuard:
+    def __init__(self, clear=True, reasons=None):
+        self.clear = clear
+        self.reasons = reasons or []
+        self.calls = 0
+
+    def all_guards_clear(self, required_vram_bytes):
+        self.calls += 1
+        return self.clear, list(self.reasons)
+
+
+class TestIdleTrainingDaemon:
+    def test_runs_training_steps_only_when_idle_and_guards_clear(self, tmp_path):
+        from dojo.idle.daemon import IdleTrainConfig, IdleTrainingDaemon
+
+        cfg = IdleTrainConfig(
+            pack_id="pack-001",
+            base_model="qwen/qwen2-0.5b",
+            output_dir=tmp_path,
+            max_optimizer_steps=1,
+            grad_accum_steps=2,
+            checkpoint_interval_seconds=0.0,
+            poll_interval_seconds=0.0,
+        )
+        daemon = IdleTrainingDaemon(
+            config=cfg,
+            idle_detector=_SequenceIdleDetector([False, True, True]),
+            resource_guard=_StaticResourceGuard(clear=True),
+        )
+
+        result = daemon.run()
+
+        assert result.status == "completed"
+        assert result.steps_completed == 1
+        assert result.checkpoints_saved >= 1
+        event_types = {e.get("type", "") for e in EvidenceLogger.get_events()}
+        assert "idle.detected" in event_types
+        assert "idle.training.resumed" in event_types
+        assert "idle.gradient_accumulated" in event_types
+        assert "idle.checkpoint.saved" in event_types
+        assert "idle.training.completed" in event_types
+
+    def test_user_activity_pauses_within_poll_interval_and_saves_state(self, tmp_path):
+        from dojo.idle.daemon import IdleTrainConfig, IdleTrainingDaemon
+
+        cfg = IdleTrainConfig(
+            pack_id="pack-001",
+            base_model="qwen/qwen2-0.5b",
+            output_dir=tmp_path,
+            max_optimizer_steps=2,
+            grad_accum_steps=2,
+            checkpoint_interval_seconds=600.0,
+            poll_interval_seconds=0.25,
+        )
+        daemon = IdleTrainingDaemon(
+            config=cfg,
+            idle_detector=_SequenceIdleDetector([True, False]),
+            resource_guard=_StaticResourceGuard(clear=True),
+        )
+
+        result = daemon.run()
+
+        assert result.status == "paused"
+        assert result.pause_latency_seconds <= 1.0
+        assert "user_activity" in result.paused_reasons
+        assert (tmp_path / "idle_accumulator_state.json").exists()
+        assert result.checkpoints_saved >= 1
+        event_types = {e.get("type", "") for e in EvidenceLogger.get_events()}
+        assert "idle.interrupted" in event_types
+
+    def test_thermal_guard_pause_emits_dedicated_evidence(self, tmp_path):
+        from dojo.idle.daemon import IdleTrainConfig, IdleTrainingDaemon
+
+        cfg = IdleTrainConfig(
+            pack_id="pack-001",
+            base_model="qwen/qwen2-0.5b",
+            output_dir=tmp_path,
+            max_optimizer_steps=1,
+            poll_interval_seconds=0.0,
+        )
+        daemon = IdleTrainingDaemon(
+            config=cfg,
+            idle_detector=_SequenceIdleDetector([True]),
+            resource_guard=_StaticResourceGuard(
+                clear=False,
+                reasons=["Thermal pause: GPU temp 82.0 C exceeds 80.0 C"],
+            ),
+        )
+
+        result = daemon.run()
+
+        assert result.status == "paused"
+        assert result.steps_completed == 0
+        assert any("Thermal pause" in reason for reason in result.paused_reasons)
+        event_types = {e.get("type", "") for e in EvidenceLogger.get_events()}
+        assert "idle.thermal.paused" in event_types
+
+    def test_resume_uses_saved_accumulator_and_latest_checkpoint(self, tmp_path):
+        from dojo.idle.accumulator import GradientAccumulator
+        from dojo.idle.daemon import IdleTrainConfig, IdleTrainingDaemon
+        from dojo.train.checkpoint import CheckpointManager
+
+        CheckpointManager(tmp_path / "checkpoints").save(4, {"source": "prior_idle_run"})
+        accum = GradientAccumulator(accum_steps=2)
+        for _ in range(4):
+            accum.record_microbatch()
+            accum.record_microbatch()
+            accum.optimizer_step_taken()
+        accum.record_microbatch()
+        accum.save_state(tmp_path / "idle_accumulator_state.json")
+
+        cfg = IdleTrainConfig(
+            pack_id="pack-001",
+            base_model="qwen/qwen2-0.5b",
+            output_dir=tmp_path,
+            max_optimizer_steps=5,
+            grad_accum_steps=2,
+            checkpoint_interval_seconds=0.0,
+            poll_interval_seconds=0.0,
+        )
+        daemon = IdleTrainingDaemon(
+            config=cfg,
+            idle_detector=_SequenceIdleDetector([True]),
+            resource_guard=_StaticResourceGuard(clear=True),
+        )
+
+        result = daemon.run()
+
+        assert result.resumed_from_step == 4
+        assert result.steps_completed == 5
+        assert result.status == "completed"
+
+    def test_resume_uses_latest_checkpoint_when_accumulator_state_missing(self, tmp_path):
+        from dojo.idle.daemon import IdleTrainConfig, IdleTrainingDaemon
+        from dojo.train.checkpoint import CheckpointManager
+
+        CheckpointManager(tmp_path / "checkpoints").save(4, {"accumulated": 0})
+
+        cfg = IdleTrainConfig(
+            pack_id="pack-001",
+            base_model="qwen/qwen2-0.5b",
+            output_dir=tmp_path,
+            max_optimizer_steps=5,
+            grad_accum_steps=2,
+            checkpoint_interval_seconds=0.0,
+            poll_interval_seconds=0.0,
+        )
+        daemon = IdleTrainingDaemon(
+            config=cfg,
+            idle_detector=_SequenceIdleDetector([True, True]),
+            resource_guard=_StaticResourceGuard(clear=True),
+        )
+
+        result = daemon.run()
+
+        assert result.resumed_from_step == 4
+        assert result.steps_completed == 5
+        assert result.status == "completed"

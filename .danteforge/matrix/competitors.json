@@ -1,0 +1,84 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "generated": "2026-05-07",
+    "project": "DanteDojo",
+    "scoring_scale": "0-10 (0=absent, 5=partial, 10=best-in-class)",
+    "methodology": "Harsh self-assessment. Wired-but-not-real-GPU-tested = 3-4 max. Stub = 1-2. Constitutional uniqueness scored full credit where genuinely novel.",
+    "total_dimensions": 50,
+    "total_competitors": 10
+  },
+  "competitors": {
+    "dante_dojo": {
+      "name": "DanteDojo",
+      "type": "ours",
+      "license": "Proprietary",
+      "url": "https://github.com/dantericardo88/DanteDojo",
+      "version": "v1.0.0-dev",
+      "description": "Sovereign AI training, eval, specialization, and inference organ. Constitutional architecture. Solo-founder hardware."
+    },
+    "axolotl": {
+      "name": "Axolotl",
+      "type": "open_source",
+      "license": "Apache-2.0",
+      "url": "https://github.com/OpenAccess-AI-Collective/axolotl",
+      "description": "YAML-driven multi-GPU fine-tuning framework. FSDP2 flagship."
+    },
+    "unsloth": {
+      "name": "Unsloth",
+      "type": "open_source",
+      "license": "Apache-2.0 / Commercial",
+      "url": "https://github.com/unslothai/unsloth",
+      "description": "Single-GPU QLoRA speed champion. Custom CUDA kernels."
+    },
+    "llamafactory": {
+      "name": "LlamaFactory",
+      "type": "open_source",
+      "license": "Apache-2.0",
+      "url": "https://github.com/hiyouga/LLaMA-Factory",
+      "description": "All-in-one unified fine-tuning + serving framework with GUI."
+    },
+    "ollama": {
+      "name": "Ollama",
+      "type": "open_source",
+      "license": "MIT",
+      "url": "https://github.com/ollama/ollama",
+      "description": "Local model runner. Simplest local inference UX. GGUF-native."
+    },
+    "litellm": {
+      "name": "LiteLLM",
+      "type": "open_source",
+      "license": "MIT",
+      "url": "https://github.com/BerriAI/litellm",
+      "description": "Unified LLM routing proxy. 100+ providers. Cost tracking."
+    },
+    "openai_ft": {
+      "name": "OpenAI Fine-tuning API",
+      "type": "closed_source",
+      "license": "Proprietary",
+      "url": "https://platform.openai.com/docs/guides/fine-tuning",
+      "description": "GPT-4o/4o-mini/3.5 fine-tuning as a managed API service."
+    },
+    "vertex_ai": {
+      "name": "Vertex AI (Google)",
+      "type": "closed_source",
+      "license": "Proprietary",
+      "url": "https://cloud.google.com/vertex-ai",
+      "description": "Google managed ML platform. Gemini fine-tuning + deployment."
+    },
+    "together_ai": {
+      "name": "Together AI",
+      "type": "closed_source",
+      "license": "Proprietary",
+      "url": "https://www.together.ai",
+      "description": "Open model cloud fine-tuning and inference. Llama/Mistral focus."
+    },
+    "modal": {
+      "name": "Modal",
+      "type": "closed_source",
+      "license": "Proprietary",
+      "url": "https://modal.com",
+      "description": "GPU cloud platform. Developer-friendly. Popular for Unsloth/vLLM recipes."
+    }
+  }
+}

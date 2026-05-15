@@ -175,27 +175,27 @@ class TestExportGptq:
 # ---------------------------------------------------------------------------
 
 class TestExportAwq:
-    def test_raises_when_llmcompressor_missing(self, tmp_path):
-        """When llmcompressor is not importable, raise QuantizationError."""
+    def test_raises_when_autoawq_missing(self, tmp_path):
+        """When autoawq (awq) is not importable, raise QuantizationError."""
         from dojo.quant import awq as awq_module
 
-        with patch.dict(sys.modules, {"llmcompressor": None}):
+        with patch.dict(sys.modules, {"awq": None}):
             with pytest.raises(QuantizationError) as exc_info:
                 awq_module.export_awq(
                     model_path=tmp_path / "model",
                     output_dir=tmp_path / "out",
                 )
-        assert "llm" in str(exc_info.value).lower() or "awq" in str(exc_info.value).lower()
+        assert "autoawq" in str(exc_info.value).lower() or "awq" in str(exc_info.value).lower()
 
     def test_error_mentions_correct_package(self, tmp_path):
-        """Error message should reference llm-compressor, not autoawq."""
+        """Error message should reference autoawq, not llmcompressor."""
         from dojo.quant import awq as awq_module
 
-        with patch.dict(sys.modules, {"llmcompressor": None}):
+        with patch.dict(sys.modules, {"awq": None}):
             with pytest.raises(QuantizationError) as exc_info:
                 awq_module.export_awq(
                     model_path=tmp_path / "model",
                     output_dir=tmp_path / "out",
                 )
         msg = str(exc_info.value)
-        assert "llm-compressor" in msg or "llmcompressor" in msg.lower()
+        assert "autoawq" in msg.lower() or "pip install autoawq" in msg.lower()

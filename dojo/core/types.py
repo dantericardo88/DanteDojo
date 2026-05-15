@@ -53,6 +53,7 @@ class TrainingBackend(str, Enum):
     AXOLOTL = "axolotl"    # Multi-GPU, config-driven, FSDP2
     MLX = "mlx"            # Apple Silicon
     NATIVE = "native"      # HF Transformers directly (H100 / custom)
+    FSDP2 = "fsdp2"        # Constitutional multi-GPU FSDP2 engine
 
 
 class Backend(str, Enum):

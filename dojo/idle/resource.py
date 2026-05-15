@@ -14,8 +14,9 @@ class ResourceGuard:
 
     VRAM_RESERVE_BYTES: int = 512 * 1024 * 1024  # 512 MB reserve for foreground apps
 
-    def __init__(self, device: int = 0) -> None:
+    def __init__(self, device: int = 0, allow_no_nvml: bool = True) -> None:
         self._device = device
+        self._allow_no_nvml = allow_no_nvml
         self._thermal = ThermalGuard()
         self._power = PowerGuard()
 
@@ -26,8 +27,8 @@ class ResourceGuard:
     def check_vram_available(self, required_bytes: int) -> bool:
         """Return ``True`` if enough free VRAM is available after the reserve.
 
-        Tries pynvml to query free VRAM.  If pynvml is unavailable, returns
-        ``True`` (optimistic — caller is responsible for handling OOM).
+        Tries pynvml to query free VRAM. If pynvml is unavailable, returns
+        according to ``allow_no_nvml``.
         """
         try:
             import pynvml  # type: ignore[import-not-found]
@@ -37,8 +38,7 @@ class ResourceGuard:
             free_usable = mem_info.free - self.VRAM_RESERVE_BYTES
             return free_usable >= required_bytes
         except Exception:
-            # pynvml unavailable or query failed — optimistic pass-through
-            return True
+            return self._allow_no_nvml
 
     # ------------------------------------------------------------------
     # Aggregate guard

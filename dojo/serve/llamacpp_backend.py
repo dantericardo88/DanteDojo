@@ -4,6 +4,9 @@ Manages the lifecycle of a llama.cpp server subprocess: start, health-check, sto
 In v1, the subprocess is only launched when DOJO_REAL_GPU=1 is set;
 otherwise the backend validates that llama_cpp is importable and documents
 the launch command without executing it.
+
+Also provides LocalGGUFRunner — a direct Python-binding runner that uses
+llama_cpp.Llama in-process, guaranteeing zero network calls during inference.
 """
 
 from __future__ import annotations
@@ -11,9 +14,11 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
-from dojo.core.exceptions import BackendUnavailable, ServerHealthTimeout, ServerStartError
+from dojo.core.evidence import EvidenceLogger, EvidenceType
+from dojo.core.exceptions import BackendUnavailable, ServerHealthTimeout, ServerStartError, ServeError
+from dojo.core.one_door import one_door
 
 _HEALTH_POLL_INTERVAL = 2.0  # seconds between health polls
 
@@ -156,4 +161,131 @@ def _stub_pid() -> int:
     return 99998
 
 
-__all__ = ["LlamaCppBackend"]
+class LocalGGUFRunner:
+    """Runs GGUF inference locally via llama-cpp-python bindings.
+
+    Constitutional guarantee: no network calls during inference.
+    All generation happens in-process via the llama_cpp Python API,
+    NOT via subprocess or any HTTP server.
+    """
+
+    def __init__(
+        self,
+        model_path: Path,
+        n_gpu_layers: int = -1,    # -1 = all layers on GPU
+        context_size: int = 2048,
+        passport_id: str = "",
+    ) -> None:
+        self._model_path = model_path
+        self._n_gpu_layers = n_gpu_layers
+        self._context_size = context_size
+        self._passport_id = passport_id
+        self._llm: Any = None
+        self._evidence = EvidenceLogger.get_instance()
+
+    @one_door("serve.local_gguf.load", organ="serve")
+    def load(self) -> None:
+        """Load the GGUF model into memory.
+
+        Raises:
+            BackendUnavailable: if llama-cpp-python is not installed.
+            ServerStartError: if model file not found or load fails.
+        """
+        _require_llama_cpp()
+
+        if not self._model_path.exists():
+            raise ServerStartError(
+                f"GGUF model not found: {self._model_path}",
+                reason="File does not exist",
+            )
+
+        self._evidence.emit(
+            {
+                "type": EvidenceType.SERVE_START.value,
+                "data": {
+                    "backend": "llamacpp_local",
+                    "model_path": str(self._model_path),
+                    "passport_id": self._passport_id,
+                    "n_gpu_layers": self._n_gpu_layers,
+                    "mode": "local_binding",  # not subprocess — no network
+                },
+            },
+            organ="serve",
+        )
+
+        if _real_gpu_mode():
+            try:
+                from llama_cpp import Llama
+                self._llm = Llama(
+                    model_path=str(self._model_path),
+                    n_gpu_layers=self._n_gpu_layers,
+                    n_ctx=self._context_size,
+                    verbose=False,
+                )
+            except Exception as exc:
+                raise ServerStartError(
+                    f"Failed to load GGUF model: {exc}",
+                    reason=str(exc),
+                ) from exc
+        # stub mode: self._llm stays None
+
+    @one_door("serve.local_gguf.generate", organ="serve")
+    def generate(
+        self,
+        prompt: str,
+        max_tokens: int = 128,
+        temperature: float = 0.7,
+    ) -> dict:
+        """Generate tokens from prompt. No network calls made.
+
+        Returns:
+            dict with "text", "tokens", "prompt_tokens" keys.
+
+        Raises:
+            ServeError: if model not loaded (real-GPU mode only).
+        """
+        if self._llm is None and _real_gpu_mode():
+            raise ServeError("Model not loaded. Call load() first.", reason="not_loaded")
+
+        if _real_gpu_mode():
+            output = self._llm(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                echo=False,
+            )
+            text = output["choices"][0]["text"]
+            tokens_generated = output["usage"]["completion_tokens"]
+            prompt_tokens = output["usage"]["prompt_tokens"]
+        else:
+            # Stub: deterministic response
+            text = f"[local stub: {prompt[:20]}...]"
+            tokens_generated = min(max_tokens, 16)
+            prompt_tokens = len(prompt.split())
+
+        self._evidence.emit(
+            {
+                "type": EvidenceType.SERVE_READY.value,
+                "data": {
+                    "backend": "llamacpp_local",
+                    "model_path": str(self._model_path),
+                    "tokens_generated": tokens_generated,
+                    "prompt_tokens": prompt_tokens,
+                    "network_calls": 0,  # constitutional guarantee
+                },
+            },
+            organ="serve",
+        )
+
+        return {
+            "text": text,
+            "tokens": tokens_generated,
+            "prompt_tokens": prompt_tokens,
+        }
+
+    def unload(self) -> None:
+        """Release model from memory."""
+        self._llm = None
+
+
+__all__ = ["LlamaCppBackend", "LocalGGUFRunner"]

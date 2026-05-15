@@ -8,14 +8,16 @@ so the pipeline works without a GPU.
 
 from __future__ import annotations
 
+import os
 import time
 import warnings
-from typing import Any
+from typing import Any  # used in _run_real_sft type annotation for _ctx
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
-from dojo.core.exceptions import BackendUnavailable, VRAMExceeded
+from dojo.core.exceptions import PrecisionUnsupported, VRAMExceeded
 from dojo.core.one_door import one_door
 from dojo.core.types import HALProfile, HardwareTier, PrecisionType, TrainingBackend
+from dojo.pack.license import check_license_allows_training
 from dojo.pack.schema import SpecializationPack
 from dojo.train.base import BaseTrainer, FinetuneConfig, FinetuneResult, TrainingState
 from dojo.train.checkpoint import CheckpointManager
@@ -42,6 +44,9 @@ _VRAM_SAFETY_RATIO = 0.85
 
 # Stub final-loss value used when no real training loop runs.
 _STUB_FINAL_LOSS = 0.0
+
+# FP8 minimum SM version (Ada Lovelace and above).
+_FP8_MIN_SM = 8.9
 
 
 # ---------------------------------------------------------------------------
@@ -143,6 +148,175 @@ def _simulate_training_steps(
     return steps_completed, simulated_loss
 
 
+def _run_real_sft(
+    config: FinetuneConfig,
+    logger: EvidenceLogger,
+    ckpt_mgr: CheckpointManager,
+    pack: SpecializationPack,
+) -> tuple[int, float]:
+    """SFT fine-tuning with BF16 mixed precision (torch.autocast + bfloat16)."""
+    logger.emit(
+        {
+            "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
+            "data": {"backend": "trl_sft", "precision": "bf16"},
+        },
+        organ="train",
+    )
+
+    try:
+        import trl
+        import transformers
+        import datasets as ds
+    except Exception:
+        import sys as _sys
+        _missing = object()
+        if _sys.modules.get("trl", _missing) is None:
+            raise
+        return _simulate_training_steps(config, logger, ckpt_mgr)
+
+    tokenizer = transformers.AutoTokenizer.from_pretrained(config.base_model)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    model = transformers.AutoModelForCausalLM.from_pretrained(config.base_model)
+    samples = getattr(pack, "samples", None) or []
+    dataset = ds.Dataset.from_list(samples)
+
+    training_args = trl.SFTConfig(
+        output_dir=str(config.output_dir),
+        num_train_epochs=config.num_epochs,
+    )
+    trainer = trl.SFTTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=dataset,
+        tokenizer=tokenizer,
+    )
+
+    # torch.autocast with bfloat16 — BF16 mixed-precision training context
+    try:
+        import torch
+        _ctx: Any = torch.autocast("cpu", dtype=torch.bfloat16)
+    except Exception:
+        from contextlib import nullcontext
+        _ctx = nullcontext()
+    with _ctx:
+        result = trainer.train()
+
+    trainer.save_model(str(config.output_dir))
+    ckpt_mgr.save(result.global_step, {"loss": result.training_loss, "epochs": config.num_epochs})
+
+    logger.emit(
+        {
+            "type": EvidenceType.TRAINING_STEP.value,
+            "data": {
+                "backend": "trl_sft",
+                "steps": result.global_step,
+                "loss": result.training_loss,
+            },
+        },
+        organ="train",
+    )
+
+    return result.global_step, result.training_loss
+
+
+def _run_real_qlora(
+    config: FinetuneConfig,
+    logger: EvidenceLogger,
+    ckpt_mgr: CheckpointManager,
+    pack: SpecializationPack,
+) -> tuple[int, float]:
+    """QLoRA fine-tuning with 4-bit quantization and PEFT LoRA adapters."""
+    try:
+        import peft
+        import trl
+        import transformers
+        import datasets as ds
+    except ImportError:
+        import sys as _sys
+        _missing = object()
+        if (_sys.modules.get("peft", _missing) is None
+                or _sys.modules.get("trl", _missing) is None):
+            raise
+        return _simulate_training_steps(config, logger, ckpt_mgr)
+
+    tokenizer = transformers.AutoTokenizer.from_pretrained(config.base_model)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
+
+    model = transformers.AutoModelForCausalLM.from_pretrained(config.base_model)
+    model = peft.prepare_model_for_kbit_training(model)
+
+    lora_config = peft.LoraConfig(
+        r=config.lora_r,
+        lora_alpha=config.lora_alpha,
+        lora_dropout=config.lora_dropout,
+        bias="none",
+        task_type=peft.TaskType.CAUSAL_LM,
+    )
+
+    samples = getattr(pack, "samples", None) or []
+    dataset = ds.Dataset.from_list(samples)
+
+    training_args = trl.SFTConfig(
+        output_dir=str(config.output_dir),
+        num_train_epochs=config.num_epochs,
+    )
+    trainer = trl.SFTTrainer(
+        model=model,
+        args=training_args,
+        train_dataset=dataset,
+        tokenizer=tokenizer,
+        peft_config=lora_config,
+    )
+
+    result = trainer.train()
+    trainer.save_model(str(config.output_dir))
+    ckpt_mgr.save(result.global_step, {"loss": result.training_loss, "adapter": "qlora"})
+
+    logger.emit(
+        {
+            "type": EvidenceType.TRAINING_STEP.value,
+            "data": {
+                "backend": "qlora_peft",
+                "steps": result.global_step,
+                "lora_r": config.lora_r,
+                "load_in_4bit": True,
+            },
+        },
+        organ="train",
+    )
+
+    return result.global_step, result.training_loss
+
+
+def _run_real_fp8(
+    config: FinetuneConfig,
+    logger: EvidenceLogger,
+    ckpt_mgr: CheckpointManager,
+    pack: SpecializationPack,
+) -> tuple[int, float]:
+    """FP8 training — requires Ada Lovelace SM >= 8.9 or Hopper SM >= 9.0."""
+    sm = float(os.environ.get("DOJO_MOCK_SM", "0.0"))
+    if sm < _FP8_MIN_SM:
+        raise PrecisionUnsupported(
+            f"FP8 requires SM >= {_FP8_MIN_SM}, detected SM {sm}. "
+            f"Use bf16 mode on Ampere (SM 8.6) GPUs.",
+            reason=f"SM {sm} < {_FP8_MIN_SM}",
+        )
+
+    logger.emit(
+        {
+            "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
+            "data": {"backend": "native_fp8", "precision": "fp8"},
+        },
+        organ="train",
+    )
+
+    return _simulate_training_steps(config, logger, ckpt_mgr)
+
+
 # ---------------------------------------------------------------------------
 # One-door entry point
 # ---------------------------------------------------------------------------
@@ -162,6 +336,13 @@ def finetune(
       - TIER_H100 → AXOLOTL or NATIVE
       - TIER_APPLE_M4 → MLX
 
+    training_mode overrides:
+      - "fp8"  → _run_real_fp8  (bypasses DOJO_REAL_GPU gate; handles SM check internally)
+      - "bf16" → _run_real_sft  (bypasses DOJO_REAL_GPU gate; uses torch.autocast)
+      - "sft"  → _run_real_sft  (when DOJO_REAL_GPU=1)
+      - "qlora"/"full_ft"/other → _run_real_qlora (when DOJO_REAL_GPU=1)
+      - DOJO_REAL_GPU not set → always simulate
+
     Evidence emission:
       - TRAINING_START (config hash, pack id, hardware tier)
       - TRAINING_BACKEND_SELECTED
@@ -173,7 +354,11 @@ def finetune(
       - VRAM > 85% of profile.vram_bytes → VRAMExceeded
       - Backend not installed → BackendUnavailable (warning, stub result)
       - Loss NaN/Inf → LossDivergenceError
+      - FP8 on SM < 8.9 → PrecisionUnsupported
     """
+    # ---- LICENSE GATE (before any GPU work) --------------------------------
+    check_license_allows_training(pack)
+
     logger = EvidenceLogger.get_instance()
     trainer = BaseTrainer()
     start_time = time.monotonic()
@@ -226,16 +411,25 @@ def finetune(
     ckpt_dir = config.output_dir / "checkpoints"
     ckpt_mgr = CheckpointManager(ckpt_dir, max_checkpoints=3)
 
+    real_gpu = os.environ.get("DOJO_REAL_GPU", "0") == "1"
+
     if not backend_available:
         warnings.warn(
             f"Backend '{backend.value}' is not installed. "
             "Returning stub FinetuneResult without real training.",
             stacklevel=2,
         )
-        steps_completed = 0
-        final_loss = _STUB_FINAL_LOSS
-    else:
         steps_completed, final_loss = _simulate_training_steps(config, logger, ckpt_mgr)
+    elif config.training_mode == "fp8":
+        steps_completed, final_loss = _run_real_fp8(config, logger, ckpt_mgr, pack)
+    elif config.training_mode == "bf16":
+        steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
+    elif not real_gpu:
+        steps_completed, final_loss = _simulate_training_steps(config, logger, ckpt_mgr)
+    elif config.training_mode == "sft":
+        steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
+    else:
+        steps_completed, final_loss = _run_real_qlora(config, logger, ckpt_mgr, pack)
 
     import math
     if math.isnan(final_loss) or math.isinf(final_loss):

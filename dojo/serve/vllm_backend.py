@@ -8,12 +8,15 @@ the launch command without executing it.
 
 from __future__ import annotations
 
+import concurrent.futures
 import os
 import time
 from pathlib import Path
 from typing import Optional
 
+from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import BackendUnavailable, ServerHealthTimeout, ServerStartError
+from dojo.core.one_door import one_door
 from dojo.core.types import HALProfile
 
 _HEALTH_POLL_INTERVAL = 2.0  # seconds between health polls
@@ -109,6 +112,80 @@ class VLLMBackend:
             reason=f"endpoint={self.endpoint_url}",
         )
 
+    @one_door("serve.vllm.concurrent", organ="serve")
+    def serve_concurrent(
+        self,
+        requests: list[dict],
+        timeout_per_request: float = 30.0,
+    ) -> list[dict]:
+        """Send requests concurrently to vLLM and return results with throughput.
+
+        Args:
+            requests: List of dicts with "prompt" key.
+            timeout_per_request: Per-request timeout in seconds.
+
+        Returns:
+            List of result dicts: {"prompt": ..., "response": ..., "tokens": int, "elapsed_s": float}
+
+        Raises:
+            ServerHealthTimeout: if server is not healthy before sending requests.
+            BackendUnavailable: if vllm is not installed.
+        """
+        _require_vllm()
+
+        evidence_log = EvidenceLogger.get_instance()
+
+        evidence_log.emit(
+            {
+                "type": EvidenceType.SERVE_START.value,
+                "data": {
+                    "backend": "vllm",
+                    "concurrent_requests": len(requests),
+                    "model_path": str(self._model_path),
+                },
+            },
+            organ="serve",
+        )
+
+        if _real_gpu_mode():
+            # Real GPU: verify health before sending requests
+            self.health_check(timeout_seconds=timeout_per_request)
+            results = self._send_concurrent_requests(requests, timeout_per_request)
+        else:
+            # Stub mode: synthetic responses with realistic timings
+            results = []
+            for i, req in enumerate(requests):
+                results.append({
+                    "prompt": req.get("prompt", ""),
+                    "response": f"[stub response {i + 1}]",
+                    "tokens": 42,
+                    "elapsed_s": 0.15 + i * 0.02,
+                })
+
+        token_counts: list[int] = [int(r["tokens"]) for r in results]
+        elapsed_vals: list[float] = [float(r["elapsed_s"]) for r in results]
+        total_tokens: int = sum(token_counts)
+        # Concurrent execution: wall time = max elapsed, not sum
+        total_elapsed: float = max(elapsed_vals) if elapsed_vals else 1.0
+        throughput: float = round(total_tokens / total_elapsed, 2) if total_elapsed > 0.0 else 0.0
+
+        evidence_log.emit(
+            {
+                "type": EvidenceType.SERVE_READY.value,
+                "data": {
+                    "backend": "vllm",
+                    "concurrent_requests": len(requests),
+                    "total_tokens": total_tokens,
+                    "total_elapsed_s": total_elapsed,
+                    "throughput_tokens_per_s": throughput,
+                    "model_path": str(self._model_path),
+                },
+            },
+            organ="serve",
+        )
+
+        return results
+
     def stop(self) -> None:
         """Send SIGTERM to the vLLM subprocess for graceful drain."""
         if self._process is None:
@@ -139,6 +216,52 @@ class VLLMBackend:
             "--trust-remote-code",
         ]
         return cmd
+
+    def _send_concurrent_requests(
+        self,
+        requests: list[dict],
+        timeout_per_request: float,
+    ) -> list[dict]:
+        """Send requests concurrently via HTTP to the vLLM completions endpoint.
+
+        Used only in real-GPU mode (DOJO_REAL_GPU=1).
+        """
+        import json as _json
+        import urllib.request
+
+        url = f"{self.endpoint_url}/v1/completions"
+
+        def _send_one(req: dict) -> dict:
+            prompt = req.get("prompt", "")
+            payload = _json.dumps({
+                "prompt": prompt,
+                "max_tokens": 64,
+                "temperature": 0.0,
+            }).encode()
+            http_req = urllib.request.Request(
+                url,
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            t0 = time.monotonic()
+            with urllib.request.urlopen(http_req, timeout=timeout_per_request) as resp:
+                body = _json.loads(resp.read())
+            elapsed = time.monotonic() - t0
+            response_text: str = body["choices"][0]["text"] if body.get("choices") else ""
+            tokens: int = int(body.get("usage", {}).get("completion_tokens", len(response_text.split())))
+            return {
+                "prompt": prompt,
+                "response": response_text,
+                "tokens": tokens,
+                "elapsed_s": elapsed,
+            }
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(requests)) as pool:
+            futures = [pool.submit(_send_one, req) for req in requests]
+            results: list[dict] = [f.result(timeout=timeout_per_request + 5.0) for f in futures]
+
+        return results
 
 
 # ---------------------------------------------------------------------------

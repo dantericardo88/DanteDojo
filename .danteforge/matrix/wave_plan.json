@@ -1,0 +1,325 @@
+{
+  "_meta": {
+    "version": "1.0.0",
+    "created": "2026-05-14",
+    "project": "DanteDojo",
+    "goal": "All 50 dimensions at harsh-score 9.0+",
+    "scoring_methodology": "harsh — wired-not-GPU-tested max 5; mock-only max 6; stub max 2; constitutional novelty full credit only when runtime check is live",
+    "hardware": "RTX 4060 Ti 16GB (Ada Lovelace, SM 8.9) — enables FP8 (d10), Triton kernels (d15). Blackwell SM10.0 NOT available — d12 FP4 is hardware-blocked, max achievable without upgrade: 5.",
+    "total_dimensions": 50,
+    "currently_green": 15,
+    "need_work": 35,
+    "hardware_blocked": ["d12"],
+    "max_agents_per_cycle": 6,
+    "estimated_cycles": 12,
+    "estimated_total_agent_dispatches": 60,
+    "stop_condition": "danteforge compete --check-all-nine exits 0 (or all non-hardware-blocked dims at 9+)"
+  },
+  "dimension_targets": {
+    "d01": 9, "d02": 9, "d03": 9, "d04": 9, "d05": 9, "d06": 9, "d07": 9,
+    "d08": 9,
+    "d09": 9, "d10": 9, "d11": 9, "d12": 5,
+    "d13": 9, "d14": 9, "d15": 9, "d16": 9, "d17": 9, "d18": 9, "d19": 9,
+    "d20": 9, "d21": 9, "d22": 9, "d23": 9, "d24": 9, "d25": 9,
+    "d26": 9, "d27": 9, "d28": 9, "d29": 9, "d30": 9, "d31": 9,
+    "d32": 9, "d33": 9, "d34": 9, "d35": 9, "d36": 9,
+    "d37": 9, "d38": 9, "d39": 9, "d40": 9, "d41": 9,
+    "d42": 9, "d43": 9, "d44": 9, "d45": 9,
+    "d46": 9, "d47": 9, "d48": 9, "d49": 9, "d50": 9
+  },
+  "current_scores": {
+    "d01":9,"d02":9,"d03":9,"d04":9,"d05":9,"d06":9,"d07":9,
+    "d08":4,"d09":6,"d10":4,"d11":5,"d12":2,"d13":5,"d14":9,"d15":2,
+    "d16":4,"d17":4,"d18":9,"d19":9,"d20":7,"d21":7,
+    "d22":3,"d23":3,"d24":2,"d25":7,
+    "d26":5,"d27":5,"d28":5,"d29":3,"d30":2,"d31":2,
+    "d32":6,"d33":9,"d34":9,"d35":3,"d36":6,
+    "d37":9,"d38":9,"d39":8,"d40":9,"d41":5,
+    "d42":4,"d43":4,"d44":2,"d45":1,
+    "d46":7,"d47":8,"d48":8,"d49":7,"d50":1
+  },
+  "waves": [
+    {
+      "wave": 1,
+      "name": "Training Foundation",
+      "rationale": "SFT+QLoRA on real GPU unblocks d11/d13/d20/d10. GGUF export unblocks d30. Real server unblocks d26/d27/d28. All four are independent — max parallelism.",
+      "agents": 4,
+      "dimensions": [
+        {
+          "id": "d16", "name": "SFT GPU-tested", "current": 4, "target": 9,
+          "what_9_means": "TRL SFTTrainer runs on RTX 4060 Ti 16GB with DOJO_REAL_GPU=1. Real loss curve logged. Model checkpoint saved. Evidence chain captures TRAIN_START/STEP/COMPLETE with Merkle root. Test: fine-tune a 1B-7B model with real data for ≥10 steps, check loss decreases, assert evidence chain is intact.",
+          "prereqs": [],
+          "unblocks": ["d11","d13","d20","d10"]
+        },
+        {
+          "id": "d17", "name": "QLoRA GPU-tested", "current": 4, "target": 9,
+          "what_9_means": "load_in_4bit + LoraConfig trains on RTX 4060 Ti 16GB. VRAM budget ≤ 14GB. Adapter saved. Evidence chain intact. Test: 7B model QLoRA, measure VRAM, assert adapter loads back.",
+          "prereqs": [],
+          "unblocks": ["d11","d20"]
+        },
+        {
+          "id": "d24", "name": "GGUF conversion", "current": 2, "target": 9,
+          "what_9_means": "dojo pack --to-gguf converts a trained HuggingFace model to Q4_K_M GGUF using llama.cpp convert scripts. Resulting GGUF is readable by llama.cpp. Constitutional passport ID embedded in GGUF metadata (key: dojo_passport_id). Test: convert 1B model, load with llama.cpp, verify passport metadata.",
+          "prereqs": [],
+          "unblocks": ["d30"]
+        },
+        {
+          "id": "d29", "name": "Real OpenAI-compatible server", "current": 3, "target": 9,
+          "what_9_means": "dojo serve starts a real FastAPI server. /v1/chat/completions accepts OpenAI-format request, routes to a local model (llama.cpp or vLLM), returns SSE tokens. Test with openai Python client. Evidence emits SERVE_REQUEST_START/COMPLETE. Tested with 3 concurrent requests.",
+          "prereqs": [],
+          "unblocks": ["d26","d27","d28","d31"]
+        }
+      ]
+    },
+    {
+      "wave": 2,
+      "name": "Quantization + vLLM",
+      "rationale": "GPTQ/AWQ need real GPU (Wave 1 proves training works). vLLM is independent. Block quant already at 7, needs adversarial tests to reach 9.",
+      "agents": 4,
+      "dimensions": [
+        {
+          "id": "d22", "name": "GPTQ real GPU", "current": 3, "target": 9,
+          "what_9_means": "AutoGPTQ quantizes a trained model to 4-bit on real GPU. GPTQ .safetensors saved. Quality gate (d13) fires: PPL measured vs FP16 baseline. Test: quantize 1B model, assert PPL delta < 15%.",
+          "prereqs": ["d16"],
+          "unblocks": ["d13"]
+        },
+        {
+          "id": "d23", "name": "AWQ real GPU", "current": 3, "target": 9,
+          "what_9_means": "AutoAWQ quantizes a trained model to 4-bit on real GPU. AWQ .safetensors saved. F1 delta check fires. Test: quantize 1B model, assert F1 delta < 5pt vs FP16.",
+          "prereqs": ["d16"],
+          "unblocks": ["d13"]
+        },
+        {
+          "id": "d25", "name": "Block quant precision floor", "current": 7, "target": 9,
+          "what_9_means": "BlockQuantizer enforces precision floor with adversarial test suite: floor violations from 5 different attack vectors (underflow, overflow, NaN, precision downcast, direct bypass). All raise BlockQuantizationError with evidence. Test: 5 adversarial tests all caught.",
+          "prereqs": [],
+          "unblocks": []
+        },
+        {
+          "id": "d31", "name": "vLLM paged attention", "current": 2, "target": 9,
+          "what_9_means": "vLLM backend wired into dojo serve --backend vllm. PagedAttention inference tested. Throughput measured. Evidence emits VLLM_SERVE_START/COMPLETE. Test: vLLM serves 3 concurrent requests, token throughput logged.",
+          "prereqs": ["d29"],
+          "unblocks": []
+        }
+      ]
+    },
+    {
+      "wave": 3,
+      "name": "GPU-unlocked Hardware Dims",
+      "rationale": "With Wave 1 done, d11/d13/d20/d09/d10 can all be validated on real RTX 4060 Ti (SM 8.9 = Ada Lovelace — FP8 is supported).",
+      "agents": 5,
+      "dimensions": [
+        {
+          "id": "d11", "name": "BF16/FP16 GPU-tested", "current": 5, "target": 9,
+          "what_9_means": "SFT training run with torch_dtype=bfloat16 on RTX 4060 Ti. Loss logged. Evidence captures precision used. Mixed precision gradient scaler active. Test: BF16 training run completes, loss < FP32 baseline within 5%.",
+          "prereqs": ["d16"]
+        },
+        {
+          "id": "d13", "name": "Quant quality gate real", "current": 5, "target": 9,
+          "what_9_means": "QuantQualityRejected fires in a real quantization run where PPL delta > 15%. Test with GPTQ (d22 done) and AWQ (d23 done): run a bad quantization, assert gate fires with evidence. Run a good quantization, assert gate passes. Both paths covered.",
+          "prereqs": ["d22","d23"]
+        },
+        {
+          "id": "d20", "name": "Idle daemon full credit", "current": 7, "target": 9,
+          "what_9_means": "dojo idle-train actually trains a model on real GPU when machine is idle. A real training loop runs (SFT, d16 done). Evidence shows IDLE_TRAIN_START + CHECKPOINT events with real loss values. Test: trigger idle state, start idle-train, verify 10 steps run, verify checkpoint saved.",
+          "prereqs": ["d16","d17"]
+        },
+        {
+          "id": "d09", "name": "SM detection real hardware", "current": 6, "target": 9,
+          "what_9_means": "dojo detect runs on real RTX 4060 Ti. Returns SM=8.9, precision matrix shows FP8=supported, FP4=not_supported. Evidence emits DETECT_HARDWARE with real torch.cuda.get_device_capability() output. Test: assert SM version is real float from CUDA, not mock.",
+          "prereqs": []
+        },
+        {
+          "id": "d10", "name": "FP8 training (SM>=8.9, Ada)", "current": 4, "target": 9,
+          "what_9_means": "RTX 4060 Ti IS Ada Lovelace (SM 8.9) — FP8 IS achievable. Wire TransformerEngine FP8 training (use_fp8=True via transformer_engine or torchao FP8). Training run with FP8 completes on RTX 4060 Ti. SM guard passes. Evidence emits FP8_TRAINING_START/STEP. Test: FP8 fine-tune of 1B model, loss logged, VRAM vs BF16 delta reported.",
+          "prereqs": ["d16"]
+        }
+      ]
+    },
+    {
+      "wave": 4,
+      "name": "Serving Streams (live inference loop)",
+      "rationale": "d29 real server (Wave 1) + d24/d30 GGUF local runner now exist. d26/d27/d28 streaming governors can be wired into a real inference loop.",
+      "agents": 4,
+      "dimensions": [
+        {
+          "id": "d30", "name": "Local model runner (GGUF/llama.cpp)", "current": 2, "target": 9,
+          "what_9_means": "dojo run or dojo serve --backend llama.cpp loads a GGUF model locally. Tokens stream. Zero cloud calls. Evidence emits LOCAL_SERVE_START/TOKEN_STREAM/COMPLETE. Test: load a Q4_K_M GGUF on RTX 4060 Ti, generate 100 tokens, assert tokens correct, assert no network calls.",
+          "prereqs": ["d24"]
+        },
+        {
+          "id": "d26", "name": "VRAM streaming (live)", "current": 5, "target": 9,
+          "what_9_means": "WeightStreamer governs real inference. At most 1 layer in VRAM at a time during a real generation pass. Tested against a model larger than VRAM (force layer-by-layer streaming). SovereignHalt fires on violation. Evidence emits LAYER_LOAD/LAYER_EVICT per step. Test: generate 50 tokens with layer streaming active, VRAM never exceeds 1-layer budget.",
+          "prereqs": ["d29","d30"]
+        },
+        {
+          "id": "d27", "name": "KV-cache streaming (live)", "current": 5, "target": 9,
+          "what_9_means": "KVCacheStreamer evicts pages during a real generation pass when capacity cap is hit. Evidence emits KV_PAGE_EVICT with constitutional reason. Tested under real token generation pressure. Test: generate 512 tokens with KV cap set to 128 tokens, assert eviction events fired, no OOM.",
+          "prereqs": ["d29","d30"]
+        },
+        {
+          "id": "d28", "name": "Prefetch governor (live)", "current": 5, "target": 9,
+          "what_9_means": "PrefetchGovernor limits lookahead to ≤16 layers during real inference. Tested under real generation. SovereignHalt fires when lookahead > 16 is attempted. Evidence emits PREFETCH_GOVERNED. Test: set lookahead=20, assert SovereignHalt, try lookahead=8, assert passes.",
+          "prereqs": ["d29","d30"]
+        }
+      ]
+    },
+    {
+      "wave": 5,
+      "name": "Routing + Cost + Revocation",
+      "rationale": "All three routing dims (d32/d35/d36) need real provider calls. d08 needs a live revocation endpoint — build a minimal DanteDojo revocation server or wire the check against a real URL.",
+      "agents": 4,
+      "dimensions": [
+        {
+          "id": "d32", "name": "Multi-provider routing (real calls)", "current": 6, "target": 9,
+          "what_9_means": "Router dispatch() makes real API calls to ≥3 providers: (1) local Ollama, (2) a cloud provider (e.g. OpenAI or Anthropic), (3) the local DanteDojo server. Routing decision logged in evidence. Cost comparison present. Test: route same prompt to all 3, assert correct provider selected per RoutingPolicy, evidence emits ROUTE_DISPATCHED.",
+          "prereqs": []
+        },
+        {
+          "id": "d35", "name": "Cost tracking real oracle", "current": 3, "target": 9,
+          "what_9_means": "Per-token cost oracle uses a provider price table (at minimum: OpenAI pricing + Anthropic pricing + local=0). max_cost_usd enforced: request above budget raises RoutingBudgetExceeded with evidence. Per-request cost logged to evidence chain with USD amount. Test: set max_cost=0.001, route a 1000-token request, assert budget enforcement fires.",
+          "prereqs": ["d32"]
+        },
+        {
+          "id": "d36", "name": "Fallback-on-unavailable (live)", "current": 6, "target": 9,
+          "what_9_means": "Tested against a real unavailable provider: start a route to a dead endpoint, assert fallback triggers correctly when fallback_on_unavailable=True, assert RoutingProviderUnavailable raised when False. Evidence emits ROUTE_FALLBACK. Test: use a down provider URL, assert both behaviors.",
+          "prereqs": ["d32"]
+        },
+        {
+          "id": "d08", "name": "Sovereign revocation (live check)", "current": 4, "target": 9,
+          "what_9_means": "At model load time, DanteDojo HTTP-GETs the revocation_url from ConstitutionalPassport. If response is {revoked: true}, raises PassportRevoked and blocks inference. Build a minimal dojo revoke-server sub-command (serve the revocation JSON) OR wire against a static HTTP endpoint. Test: (1) serve revoked=false, load model → succeeds. (2) serve revoked=true, load model → PassportRevoked raised. Evidence emits REVOCATION_CHECKED.",
+          "prereqs": []
+        }
+      ]
+    },
+    {
+      "wave": 6,
+      "name": "Experiment Tracking (no GPU needed)",
+      "rationale": "cat_h is the weakest category at 27.5%. All 4 dims are pure Python. W&B + comparison leaderboard are free wins.",
+      "agents": 4,
+      "dimensions": [
+        {
+          "id": "d42", "name": "MLflow production", "current": 4, "target": 9,
+          "what_9_means": "MLflow tracking server integration is production-hardened. start_run(), log_param(), log_metric(), log_artifact() all work against a real MLflow server (not just in-memory). Run URI returned and storable. Evidence emits EXPERIMENT_RUN_LOGGED. Test: spin up mlflow server in CI, run training, assert run appears in server.",
+          "prereqs": []
+        },
+        {
+          "id": "d43", "name": "Run logging (params/metrics/artifacts)", "current": 4, "target": 9,
+          "what_9_means": "Training hyperparams (lr, batch_size, model, epochs), loss curve (step-level), and model artifact path all logged. Evidence chain captures PARAMS_LOGGED/METRICS_LOGGED/ARTIFACT_LOGGED. Test: run training with MLflow active, query API, assert all 3 types present.",
+          "prereqs": ["d42"]
+        },
+        {
+          "id": "d44", "name": "Experiment comparison + leaderboard", "current": 2, "target": 9,
+          "what_9_means": "dojo experiment compare returns a ranked table of runs sorted by F1 or eval loss. Best checkpoint highlighted. Exportable as JSON. Test: create 3 runs with different F1 scores, assert compare returns correct rank order.",
+          "prereqs": ["d43"]
+        },
+        {
+          "id": "d45", "name": "W&B + Neptune/alt tracker", "current": 1, "target": 9,
+          "what_9_means": "W&B integration via wandb.init() callback wired into training loop. dojo train --tracker wandb logs run to W&B. Alternative (Neptune or Comet) also supported via --tracker flag. Test: mock wandb server, assert log_param/metric called. Constitutional note: tracker is pluggable but evidence chain (d02) remains sovereign regardless of tracker.",
+          "prereqs": []
+        }
+      ]
+    },
+    {
+      "wave": 7,
+      "name": "Near-9s + Ecosystem (6 agents — largest wave)",
+      "rationale": "Six dimensions clustered in the 7-8 range, all no-GPU, all independent. Ship them in one wave with 6 agents.",
+      "agents": 6,
+      "dimensions": [
+        {
+          "id": "d39", "name": "Judge agreement gate ≥80%", "current": 8, "target": 9,
+          "what_9_means": "3 distinct judge models run (e.g. GPT-4, Claude Haiku, Gemini Flash). Agreement calculated pairwise. JudgeDriftError fires when agreement < 80% across all 3 pairs. Evidence emits JUDGE_AGREEMENT with scores from each judge. Test: mock all 3 judges with controlled disagreement, assert gate fires at <80%.",
+          "prereqs": []
+        },
+        {
+          "id": "d41", "name": "Synthetic eval fallback", "current": 5, "target": 9,
+          "what_9_means": "Synthetic tasks cover all 8 canonical benchmarks: MMLU (5-shot), HellaSwag (10-shot), ARC-Challenge (25-shot), WinoGrande (5-shot), TruthfulQA (0-shot), BoolQ (0-shot), GSM8K (8-shot), LAMBADA (0-shot). Synthetic variants match format and few-shot structure. Test: run with lm-eval mocked as unavailable, assert all 8 synthetic tasks run, scores returned.",
+          "prereqs": []
+        },
+        {
+          "id": "d21", "name": "Contamination detection real corpus", "current": 7, "target": 9,
+          "what_9_means": "PackContaminationDetected tested against a real multi-GB dataset (HuggingFace dataset, ≥1M examples). Hash-check completes in < 60s via streaming. Evidence emits CONTAMINATION_CHECKED with corpus size and match count. Test: inject 10 known eval-gold items into training corpus, assert all 10 detected.",
+          "prereqs": []
+        },
+        {
+          "id": "d46", "name": "Model registry (dojo:// URI)", "current": 7, "target": 9,
+          "what_9_means": "Full CRUD: register, lookup, list, delete, version. dojo:// URIs are resolvable to artifact paths. Versioning: multiple versions of same model name stored and selectable (dojo://my-model:v2). Test: register model v1 + v2, lookup v1 returns correct path, list shows both, delete v1 succeeds.",
+          "prereqs": []
+        },
+        {
+          "id": "d47", "name": "Pack import + provenance chain", "current": 8, "target": 9,
+          "what_9_means": "Full provenance chain: pack import validates signature, checks license (d48), records provenance hash into evidence chain. Pack hash is recorded at import time. Test: import a real HuggingFace dataset as a pack, assert signature check passes, assert provenance in evidence chain, assert PackSchemaInvalid on malformed pack.",
+          "prereqs": []
+        },
+        {
+          "id": "d48", "name": "License validation (allows_derived_ft)", "current": 8, "target": 9,
+          "what_9_means": "All license check paths tested: Apache-2.0 (allows_derived_ft=True), Llama Community License (allows_derived_ft=True with attribution), CC-BY-NC (allows_derived_ft=False → blocked). LicenseViolation raised with specific license name. Test: 3 license scenarios, assert correct pass/block behavior, assert evidence emits LICENSE_CHECKED.",
+          "prereqs": []
+        }
+      ]
+    },
+    {
+      "wave": 8,
+      "name": "CLI + PyPI + Ecosystem",
+      "rationale": "d49 CLI completeness needs end-to-end smoke test. d50 PyPI requires publishing. d21 refinement if not fully green.",
+      "agents": 3,
+      "dimensions": [
+        {
+          "id": "d49", "name": "CLI completeness + ergonomics", "current": 7, "target": 9,
+          "what_9_means": "All 12 CLI commands (detect, idle-train, train, serve, eval, promote, pack, registry, experiment, evidence, stream, version) smoke-tested end-to-end with DOJO_REAL_GPU=0 (mock mode). --help works for all sub-commands. dojo --version returns correct semver. Test: CI runs all 12 dojo <cmd> --help without error.",
+          "prereqs": []
+        },
+        {
+          "id": "d50", "name": "PyPI + docs + community", "current": 1, "target": 9,
+          "what_9_means": "pip install dantedojo works. Versioned docs at a public URL. README with quickstart. GitHub Actions CI badge on README. Test: wheel builds cleanly, twine check passes, docs build with mkdocs/sphinx. Note: community is organic but PyPI + docs + CI = 9.",
+          "prereqs": []
+        },
+        {
+          "id": "d21_refinement", "name": "Contamination detection — fallback refinement", "current": 7, "target": 9,
+          "what_9_means": "Retry if Wave 7 didn't reach 9. Focus on streaming large-corpus performance and evidence completeness.",
+          "prereqs": ["d21"]
+        }
+      ]
+    },
+    {
+      "wave": 9,
+      "name": "Triton Kernels + Custom CUDA (high effort stretch)",
+      "rationale": "d15 custom CUDA/Triton kernels. RTX 4060 Ti (SM 8.9) supports Triton. This wave is high effort — schedule after all other dims are green.",
+      "agents": 2,
+      "dimensions": [
+        {
+          "id": "d15", "name": "Custom Triton/CUDA kernels for QLoRA", "current": 2, "target": 9,
+          "what_9_means": "Implement ≥2 custom Triton kernels: (1) fused dequant+matmul for 4-bit base model forward pass, (2) custom BF16 attention kernel. Benchmarked on RTX 4060 Ti: ≥20% throughput improvement vs HF TRL baseline on QLoRA SFT. Evidence emits KERNEL_LOADED with kernel name and speedup ratio. Test: benchmark 100 training steps with/without kernel, assert ≥20% speedup.",
+          "prereqs": ["d16","d17"],
+          "effort_note": "Very high — 2-4 days. Schedule last."
+        }
+      ]
+    },
+    {
+      "wave": "HARDWARE_BLOCKED",
+      "name": "Blackwell FP4 — Hardware Upgrade Required",
+      "rationale": "d12 requires SM10.0 (Blackwell). RTX 4060 Ti is SM 8.9. Cannot reach 9 without hardware upgrade. Max achievable on current HW: 5.",
+      "agents": 0,
+      "dimensions": [
+        {
+          "id": "d12", "name": "FP4 training (Blackwell SM10.0)", "current": 2, "target": 5,
+          "what_9_means": "N/A on current hardware. To reach 9: requires RTX 5080/5090 or H200 (SM10.0). To reach 5: complete SM10.0 guard, FP4 training path wired, PrecisionUnsupported raised on SM<10.0 with test.",
+          "hardware_required": "SM 10.0 (Blackwell) — RTX 5080/5090 or H200",
+          "current_hw_max": 5
+        }
+      ]
+    }
+  ],
+  "priority_order": [
+    "d16","d17","d24","d29",
+    "d22","d23","d25","d31",
+    "d11","d13","d20","d09","d10",
+    "d30","d26","d27","d28",
+    "d32","d35","d36","d08",
+    "d42","d43","d44","d45",
+    "d39","d41","d21","d46","d47","d48",
+    "d49","d50",
+    "d15",
+    "d12"
+  ]
+}

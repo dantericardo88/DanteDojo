@@ -47,12 +47,15 @@ def detect(
         typer.echo(json.dumps(profile.to_dict(), indent=2))
     else:
         d = profile.to_dict()
+        cc = d['compute_capability']
         console.print(f"[bold green]HAL Detection Result[/bold green]")
         console.print(f"  Tier:               {d['tier']}")
         console.print(f"  GPU:                {d['gpu_name']}")
         console.print(f"  VRAM:               {profile.vram_gb:.1f} GB")
-        console.print(f"  Compute capability: {d['compute_capability']}")
-        console.print(f"  Native FP8:         {d['has_native_fp8']}")
+        console.print(f"  SM version:         {cc}")
+        console.print(f"  Compute capability: {cc}")
+        console.print(f"  Native FP8:         {'yes' if d['has_native_fp8'] else 'no'}")
+        console.print(f"  Native FP4:         {'yes' if d.get('has_native_fp4') else 'no'}")
         console.print(f"  Driver:             {d['driver_version']}")
         console.print(f"  SHA-256:            {d['profile_sha256'][:16]}...")
 
@@ -67,18 +70,19 @@ app.add_typer(pack_app, name="pack")
 
 @pack_app.command("import")
 def pack_import(
-    uri: str = typer.Argument(..., help="Pack URI, e.g. harvest://empanada-bookkeeping/v3"),
-    signature: str = typer.Option("", "--sig", help="Ed25519 signature hex (omit for test sentinel)"),
+    manifest_path: str = typer.Argument(..., help="Path to pack manifest JSON file"),
+    data_path: str = typer.Argument(..., help="Path to pack data parquet/jsonl file"),
     dry_run: bool = typer.Option(False, "--dry-run", help="Validate only, do not index"),
 ) -> None:
-    """Import a specialization pack from a Harvest URI."""
+    """Import a specialization pack from local manifest and data files."""
     from dojo.pack.importer import import_pack
-    sig_bytes = bytes.fromhex(signature) if signature else b"test_signature"
-    with console.status(f"Importing pack {uri!r}…"):
-        result = import_pack(uri=uri, raw_data=[], signature=sig_bytes)
+    mpath = Path(manifest_path)
+    dpath = Path(data_path)
+    with console.status(f"Importing pack from {manifest_path!r}…"):
+        result = import_pack(manifest_path=mpath, data_path=dpath)
     d = result.to_dict() if hasattr(result, "to_dict") else vars(result)
-    console.print(f"[green]Pack imported:[/green] {d.get('pack_id', uri)}")
-    if json.dumps(d, default=str):
+    console.print(f"[green]Pack imported:[/green] {d.get('pack_id', manifest_path)}")
+    if not dry_run:
         console.print(json.dumps(d, indent=2, default=str))
 
 
@@ -96,28 +100,58 @@ def train(
     json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
 ) -> None:
     """Fine-tune a base model using the Dojo training pipeline."""
-    from dojo.core.types import (
-        DojoConfig, HardwareTier, PrecisionType, TrainingBackend, TrainingMode,
-    )
     from dojo.hal.detector import detect as _detect
+    from dojo.pack.schema import SpecializationPack
     from dojo.train.base import FinetuneConfig
     from dojo.train.finetune import finetune
 
+    from dojo.core.types import LicenseSpec, PackFormat, ProvenanceManifest
+    from datetime import datetime, timezone as _tz
+
     profile = _detect()
     cfg = FinetuneConfig(
+        pack_id=pack_uri or "default",
         base_model=base_model,
         output_dir=Path(output_dir) if output_dir else Path("./checkpoints"),
         num_epochs=epochs,
         seed=seed,
     )
+    # Build a minimal in-memory pack stub for CLI invocations without a
+    # real manifest file (CI / smoke mode).  When a pack_uri is supplied a
+    # real import should be performed first; the stub is only a placeholder.
+    pack = SpecializationPack(
+        pack_id=pack_uri or "default",
+        version="0.0.0",
+        schema_version="1.0",
+        sample_count=0,
+        format=PackFormat.INSTRUCTION,
+        splits={"train": 0, "val": 0, "held_out_gold": 0},
+        harvest_receipt="cli_stub",
+        license=LicenseSpec(
+            spdx_id="Apache-2.0",
+            allows_derived_ft=True,
+            allows_commercial_use=True,
+            requires_attribution=False,
+        ),
+        provenance=ProvenanceManifest(
+            harvest_organ_version="0.0.0",
+            sources=(),
+            collection_date_utc=datetime.now(_tz.utc).date().isoformat(),
+            dedup_method="none",
+            human_reviewed=False,
+        ),
+        signature=b"test_signature",
+        manifest_sha256="0" * 64,
+        data_parquet_sha256="0" * 64,
+    )
     with console.status(f"Training {base_model!r}…"):
-        result = finetune(config=cfg, profile=profile)
+        result = finetune(config=cfg, hal_profile=profile, pack=pack)
     if json_out:
         typer.echo(json.dumps(result.to_dict() if hasattr(result, "to_dict") else vars(result), default=str, indent=2))
     else:
         console.print(f"[green]Training complete[/green]")
         console.print(f"  Receipt: {result.training_receipt[:16]}...")
-        console.print(f"  Epochs:  {result.epochs_completed}")
+        console.print(f"  Steps:   {result.steps_completed}")
 
 
 # ---------------------------------------------------------------------------
@@ -136,8 +170,16 @@ def serve(
     from dojo.serve.launcher import launch_server
 
     profile = _detect()
+    # model_path is derived from artifact_id for CLI invocations.
+    # A real deployment would look up the artifact in the registry first.
+    model_path = Path(artifact_id) if Path(artifact_id).exists() else Path("./artifacts") / artifact_id
     with console.status(f"Launching server for {artifact_id!r}…"):
-        manifest = launch_server(artifact_id=artifact_id, profile=profile, host=host, port=port)
+        manifest = launch_server(
+            model_artifact_id=artifact_id,
+            model_path=model_path,
+            profile=profile,
+            port=port,
+        )
     if json_out:
         typer.echo(json.dumps(manifest.to_dict() if hasattr(manifest, "to_dict") else vars(manifest), default=str, indent=2))
     else:
@@ -151,20 +193,42 @@ def serve(
 
 @app.command()
 def eval(
-    artifact_id: str = typer.Argument(..., help="Dojo model artifact ID to evaluate"),
+    artifact_id: Optional[str] = typer.Argument(None, help="Dojo model artifact ID to evaluate"),
     suite: str = typer.Option("dante", "--suite", help="Eval suite: dante|lm_eval|livebench"),
     tasks: str = typer.Option("", "--tasks", help="Comma-separated task names"),
     seeds: int = typer.Option(5, "--seeds", help="Number of seeds for CI"),
     json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+    list_tasks: bool = typer.Option(False, "--list-tasks", help="Print available eval tasks and exit"),
 ) -> None:
     """Run the evaluation harness on a registered model artifact."""
+    if list_tasks:
+        from dojo.eval.lm_eval_tasks import LM_EVAL_STANDARD_TASKS
+        t = Table("Task", "Few-shot", "Description")
+        for task in LM_EVAL_STANDARD_TASKS.values():
+            t.add_row(task.name, str(task.default_num_fewshot), task.description)
+        console.print(t)
+        return
+
+    if artifact_id is None:
+        typer.echo("Error: artifact_id is required unless --list-tasks is specified.", err=True)
+        raise typer.Exit(code=1)
+
+    from dojo.core.types import ModelArtifact
     from dojo.eval.harness import EvalSuite, run_eval
 
     task_list = tuple(t.strip() for t in tasks.split(",") if t.strip()) if tasks else ()
     suite_obj = EvalSuite(suite_type=suite, tasks=task_list, seeds=seeds)
+    model = ModelArtifact(
+        artifact_id=artifact_id,
+        base_model=artifact_id,
+        lora_weights=None,
+        quantization=None,
+        training_receipt="cli_eval",
+        passport=None,
+    )
 
     with console.status(f"Evaluating {artifact_id!r}…"):
-        receipt = run_eval(artifact_id=artifact_id, suite=suite_obj)
+        receipt = run_eval(model=model, suite=suite_obj, seeds=seeds)
 
     if json_out:
         typer.echo(json.dumps({
@@ -240,13 +304,13 @@ def registry_list() -> None:
     """List all artifacts registered in the local Dojo registry."""
     from dojo.registry.store import LocalRegistryStore
     store = LocalRegistryStore()
-    artifacts = store.list_artifacts()
-    if not artifacts:
+    details = store.list_artifact_details()
+    if not details:
         console.print("[yellow]No artifacts registered.[/yellow]")
         return
-    t = Table("Artifact ID", "Base Model", "Created At")
-    for a in artifacts:
-        t.add_row(a.artifact_id, a.base_model, a.created_at.isoformat())
+    t = Table("Artifact ID", "Base Model", "Registered At")
+    for d in details:
+        t.add_row(d.get("artifact_id", ""), d.get("model_name", ""), d.get("registered_at", ""))
     console.print(t)
 
 
@@ -325,6 +389,39 @@ def evidence_export(
     console.print(f"[green]Receipt exported[/green] → {output}")
     console.print(f"  Merkle root: {receipt['merkle_root'][:32]}...")
     console.print(f"  Events:      {receipt['event_count']}")
+
+
+# ---------------------------------------------------------------------------
+# Idle training
+# ---------------------------------------------------------------------------
+
+@app.command("idle-train")
+def idle_train(
+    base_model: str = typer.Argument(..., help="HuggingFace model ID or local path"),
+    pack: str = typer.Option("", "--pack", help="Pack ID to train on"),
+    output_dir: str = typer.Option("", "--output-dir", help="Checkpoint output directory"),
+    max_optimizer_steps: int = typer.Option(100, "--max-optimizer-steps", help="Max optimizer steps per idle window"),
+    json_out: bool = typer.Option(False, "--json", help="Output as JSON"),
+) -> None:
+    """Run idle-time fine-tuning — trains only when the system is idle."""
+    import dataclasses
+    from pathlib import Path as _Path
+    from dojo.idle.daemon import IdleTrainConfig, IdleTrainingDaemon
+
+    config = IdleTrainConfig(
+        base_model=base_model,
+        pack_id=pack or "default",
+        output_dir=_Path(output_dir) if output_dir else _Path("artifacts/idle_checkpoints"),
+        max_optimizer_steps=max_optimizer_steps,
+    )
+    daemon = IdleTrainingDaemon(config)
+    result = daemon.run()
+    if json_out:
+        typer.echo(json.dumps(dataclasses.asdict(result), indent=2))
+    else:
+        console.print(f"[green]Idle training {result.status}[/green]")
+        console.print(f"  Steps:     {result.steps_completed}")
+        console.print(f"  Checkpoints saved: {result.checkpoints_saved}")
 
 
 # ---------------------------------------------------------------------------

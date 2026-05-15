@@ -77,6 +77,7 @@ def launch_server(
     context_length: int = 4096,
     port: int = 8080,
     passport_id: str = "",
+    openai_port: Optional[int] = None,
 ) -> DeploymentManifest:
     """Select and launch an inference server.
 
@@ -174,6 +175,25 @@ def launch_server(
         },
         organ="serve",
     )
+
+    if openai_port is not None:
+        import threading
+        import uvicorn
+        from typing import Any as _Any
+        from dojo.serve.openai_compat import create_app
+
+        _openai_app: _Any = create_app(
+            backend_url=endpoint_url,
+            model_id=model_artifact_id,
+            passport_id=passport_id,
+        )
+        _openai_port: int = openai_port
+
+        def _run_openai_api() -> None:
+            uvicorn.run(_openai_app, host="127.0.0.1", port=_openai_port, log_level="warning")  # type: ignore[arg-type]
+
+        t = threading.Thread(target=_run_openai_api, daemon=True, name="dojo-openai-api")
+        t.start()
 
     return manifest
 

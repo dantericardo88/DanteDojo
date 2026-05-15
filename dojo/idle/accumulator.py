@@ -72,6 +72,17 @@ class GradientAccumulator:
         self._current_step += 1
         self._accumulated = 0
 
+    def restore_state(self, current_step: int, accumulated: int = 0) -> None:
+        """Restore counters from a checkpoint manifest."""
+        if current_step < 0:
+            raise ValueError(f"current_step must be >= 0, got {current_step}")
+        if not 0 <= accumulated < self._accum_steps:
+            raise ValueError(
+                f"accumulated must be in [0, {self._accum_steps}), got {accumulated}"
+            )
+        self._current_step = current_step
+        self._accumulated = accumulated
+
     # ------------------------------------------------------------------
     # Persistence
     # ------------------------------------------------------------------

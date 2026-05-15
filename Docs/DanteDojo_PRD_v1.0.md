@@ -1185,3 +1185,24 @@ Required docs at ship:
 ---
 
 **End of PRD v1.0. Hand to Claude Code + Codex. Go build.**
+
+---
+
+## 11. Context Economy Addendum
+
+This addendum is required by DanteForge Article XIV: Context Economy. Dojo is Python-native, but it must still emit context-economy telemetry compatible with the shared Dante ledger.
+
+| Surface | Expected context footprint | Expected compression ratio | Sacred content types |
+|---|---:|---:|---|
+| Training run summaries | <= 10 KB per orchestration turn | 40%+ on routine logs; raw passthrough on failures | OOM errors, CUDA errors, data-loader failures, checkpoint failures, eval regressions |
+| Eval and promotion receipts | <= 8 KB per prompt unless full audit is requested | 40%+ on successful eval receipts | promotion gate failures, score regressions, policy denials, tamper evidence |
+| Hardware/HAL reports | <= 4 KB per prompt | 50%+ on repeated hardware probes | unsupported precision warnings, thermal/VRAM guard failures |
+| Harvest pack import summaries | <= 6 KB per prompt | 40%+ on manifest/provenance summaries | rights violations, missing signatures, provenance gaps |
+
+Implementation requirements:
+
+- Dojo must add a Python context-economy adapter that writes the same JSONL fields as PRD-26.
+- Evidence writes under `docs/evidence/` and future Dojo evidence dirs must use per-artifact compression rules.
+- Sacred content must be preserved verbatim or passed through raw when uncertain.
+- Phase gates must report observed token footprint, compression ratio, and sacred bypass count.
+- Dojo is production-ready for Context Economy only at 7.0+ on the shared five-submetric rubric.

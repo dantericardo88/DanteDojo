@@ -32,6 +32,7 @@ from dojo.core.exceptions import (
 from dojo.core.fsm import BaseFSM
 from dojo.core.one_door import one_door
 from dojo.core.types import PackFormat
+from dojo.pack.license import build_provenance_summary
 from dojo.pack.schema import SpecializationPack, pack_from_dict, validate_schema
 from dojo.pack.tokenize import compute_sample_hash
 
@@ -317,6 +318,7 @@ def import_pack(
                 "sample_count": pack.sample_count,
                 "splits": pack.splits,
                 "manifest_sha256": pack.manifest_sha256,
+                "provenance": build_provenance_summary(pack),
             },
         },
         organ="pack",

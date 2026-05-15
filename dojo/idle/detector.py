@@ -7,11 +7,8 @@ and emits an evidence event when transitioning from active to idle.
 from __future__ import annotations
 
 import platform
-import sys
-from typing import Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
-
 
 _LARGE_IDLE_SECONDS = 86400.0  # 24 h — used as a safe "assume idle" fallback
 
@@ -24,7 +21,7 @@ class IdleDetector:
     def __init__(self, threshold_seconds: int = DEFAULT_IDLE_THRESHOLD_SECONDS) -> None:
         self._threshold = threshold_seconds
         self._logger = EvidenceLogger.get_instance()
-        self._was_idle: Optional[bool] = None  # tracks previous idle state
+        self._was_idle: bool | None = None  # tracks previous idle state
 
     # ------------------------------------------------------------------
     # Platform-specific idle detection
@@ -65,6 +62,19 @@ class IdleDetector:
             self._logger.emit(
                 {
                     "type": EvidenceType.IDLE_WINDOW_DETECTED.value,
+                    "data": {
+                        "idle_seconds": idle_seconds,
+                        "threshold_seconds": self._threshold,
+                    },
+                },
+                organ="idle",
+            )
+
+        if not currently_idle and self._was_idle is True:
+            # Transition: idle -> active
+            self._logger.emit(
+                {
+                    "type": EvidenceType.IDLE_INTERRUPTED.value,
                     "data": {
                         "idle_seconds": idle_seconds,
                         "threshold_seconds": self._threshold,

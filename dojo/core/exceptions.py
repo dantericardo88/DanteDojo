@@ -29,6 +29,13 @@ class OneDoorViolation(DojoError):
     """Raised when a caller bypasses the one-door entry point of a subsystem."""
 
 
+class SovereignHalt(DojoError):
+    """Raised when a constitutional hard limit is breached during inference.
+
+    Examples: lookahead > 16 layers, VRAM eviction failure.
+    """
+
+
 class EvidenceChainError(DojoError):
     """Raised when the evidence chain is corrupt or cannot be written."""
 
@@ -98,6 +105,26 @@ class BackendUnavailable(TrainingError):
     """Raised when the requested training backend (Unsloth/Axolotl) is not installed."""
 
 
+class FSDP2ConfigError(TrainingError):
+    """Raised when FSDP2 sharding strategy or config parameters are invalid."""
+
+
+class RLTrainingError(TrainingError):
+    """Base exception for reinforcement-learning training failures (GRPO, DPO, PPO)."""
+
+
+class KLExplosionError(RLTrainingError):
+    """Raised when KL divergence exceeds the constitutional max_kl ceiling during GRPO training."""
+
+
+class GRPODivergenceError(RLTrainingError):
+    """Raised when GRPO reward or policy diverges beyond recoverable bounds."""
+
+
+class DPORewardCollapse(RLTrainingError):
+    """Raised when chosen_reward ≤ rejected_reward for too many steps (reward margin collapse)."""
+
+
 # --- Quantization ---
 
 class QuantizationError(DojoError):
@@ -134,6 +161,14 @@ class PrivacyTierViolation(RouteError):
 
 class NoRouteAvailable(RouteError):
     """Raised when no valid route exists for the given task and privacy tier."""
+
+
+class BudgetExceeded(RouteError):
+    """Raised when a routing request would exceed the monthly budget limit."""
+
+
+class RoutingProviderUnavailable(RouteError):
+    """Raised when all preferred providers are unavailable and no fallback exists."""
 
 
 # --- Evaluation ---
@@ -194,6 +229,7 @@ class RegistryError(DojoError):
 __all__ = [
     "DojoError",
     "OneDoorViolation",
+    "SovereignHalt",
     "EvidenceChainError",
     "FSMTransitionError",
     "ConstitutionalViolation",
@@ -209,6 +245,11 @@ __all__ = [
     "LossDivergenceError",
     "CheckpointError",
     "BackendUnavailable",
+    "FSDP2ConfigError",
+    "RLTrainingError",
+    "KLExplosionError",
+    "GRPODivergenceError",
+    "DPORewardCollapse",
     "QuantizationError",
     "QuantQualityRejected",
     "ServeError",
@@ -217,6 +258,8 @@ __all__ = [
     "RouteError",
     "PrivacyTierViolation",
     "NoRouteAvailable",
+    "BudgetExceeded",
+    "RoutingProviderUnavailable",
     "EvalError",
     "EvalContaminationError",
     "JudgeDriftError",

@@ -29,6 +29,7 @@ pip install -e ".[dev,train]"
 |---|---|
 | `dojo detect` | Detect hardware, VRAM, compute capability, and recommend precision profile |
 | `dojo train` | Launch a fine-tuning run (Unsloth/Axolotl backend) |
+| `dojo idle-train` | Run fine-tuning only during idle windows with thermal/VRAM/power guards |
 | `dojo serve` | Start a vLLM or llama.cpp inference server |
 | `dojo eval` | Run lm-eval benchmarks against a checkpoint |
 | `dojo promote` | Run the three-way promotion gate and issue a Constitutional Passport |

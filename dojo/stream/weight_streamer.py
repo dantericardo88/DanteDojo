@@ -155,6 +155,21 @@ class WeightStreamer:
         self.evidence.info({"type": EvidenceType.LAYER_STREAM_EVICTED.value, "data": {"layer_id": evicted}}, organ="stream")
         return evicted
 
+    def vram_budget_check(self) -> Dict[str, Any]:
+        """Return VRAM budget status and verify 1-layer maximum."""
+        active = self.active_layer
+        result = {
+            "active_layer": active,
+            "layers_streamed": self._layers_streamed,
+            "budget_ok": active is None,  # True iff no layer currently in VRAM
+            "max_active_layers": self.MAX_ACTIVE_LAYERS,
+        }
+        self.evidence.info(
+            {"type": EvidenceType.LAYER_STREAM_LOADED.value, "data": result},
+            organ="stream",
+        )
+        return result
+
     def get_device_map(self) -> Dict[str, str]:
         return dict(self._device_map)
 

@@ -70,6 +70,8 @@ class BlockQuantizer:
     def quantize_block(self, raw_block: str, format: str, precision: str) -> QuantizeResult:
         if not raw_block:
             raise BlockQuantizerError("raw_block cannot be empty")
+        if format not in SUPPORTED_FORMATS:
+            raise BlockQuantizerError(f"format must be one of {SUPPORTED_FORMATS}")
         if precision not in _PRECISION_RANK:
             raise BlockQuantizerError(f"precision must be one of {SUPPORTED_PRECISIONS}")
 

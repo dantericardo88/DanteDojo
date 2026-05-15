@@ -6,11 +6,16 @@ privacy tiers, and records cost receipts.
 
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
-from dojo.core.exceptions import NoRouteAvailable, PrivacyTierViolation
+from dojo.core.exceptions import (
+    NoRouteAvailable,
+    PrivacyTierViolation,
+    RoutingProviderUnavailable,
+)
 from dojo.core.one_door import one_door
 from dojo.core.types import (
     CostReceipt,
@@ -18,6 +23,10 @@ from dojo.core.types import (
     RoutingOption,
     RoutingPolicy,
 )
+
+# Providers marked as dead — populated by tests or a health monitor.
+# Any RoutingOption.value string placed here will be treated as unavailable.
+_DEAD_PROVIDERS: set[str] = set()
 
 # Route options that require external API access
 _EXTERNAL_API_OPTIONS: frozenset[RoutingOption] = frozenset({
@@ -42,6 +51,29 @@ _API_COST_PER_1K: dict[RoutingOption, float] = {
 }
 
 
+def _is_provider_alive(option: RoutingOption) -> bool:
+    """Return False if the provider is known dead; True otherwise.
+
+    In real-GPU mode (DOJO_REAL_GPU=1) a HEAD request is made to the endpoint.
+    In stub/test mode only _DEAD_PROVIDERS is consulted.
+    """
+    if option.value in _DEAD_PROVIDERS:
+        return False
+
+    if os.environ.get("DOJO_REAL_GPU") == "1":
+        import urllib.error
+        import urllib.request
+        endpoint = _api_endpoint(option)
+        if endpoint:
+            try:
+                req = urllib.request.Request(endpoint, method="HEAD")
+                with urllib.request.urlopen(req, timeout=3.0):
+                    pass
+            except urllib.error.URLError:
+                return False
+    return True
+
+
 @one_door("route.dispatch")
 def dispatch(
     task: str,
@@ -49,7 +81,7 @@ def dispatch(
     policy: RoutingPolicy,
     *,
     available_specialists: Optional[list[str]] = None,
-    cost_tracker: Optional[object] = None,
+    cost_tracker: Optional[Any] = None,
 ) -> dict:
     """Route an inference request according to the RoutingPolicy.
 
@@ -62,7 +94,8 @@ def dispatch(
         policy: RoutingPolicy describing preferences and constraints.
         available_specialists: List of specialist model names currently
             deployed. Determines whether LOCAL_SPECIALIST is viable.
-        cost_tracker: Optional CostTracker to persist cost receipts.
+        cost_tracker: Optional CostTracker to persist cost receipts and
+            enforce monthly budget limits.
 
     Returns:
         dict with keys:
@@ -74,12 +107,16 @@ def dispatch(
     Raises:
         PrivacyTierViolation: when CONFIDENTIAL/SECRETS data would reach an API.
         NoRouteAvailable: when no viable route exists.
+        RoutingProviderUnavailable: when all preferred external providers are dead
+            and no local fallback exists in the preference order.
+        BudgetExceeded: when the estimated cost would exceed monthly_limit_usd.
     """
     logger = EvidenceLogger.get_instance()
     specialists = set(available_specialists or [])
 
     chosen: Optional[RoutingOption] = None
     reason: str = ""
+    dead_providers_skipped: list[str] = []
 
     for option in policy.preference_order:
         viable, why = _is_viable(option, policy, specialists)
@@ -103,6 +140,23 @@ def dispatch(
                     f"routing to external API ({option.value})",
                     reason=why,
                 )
+            # Track dead external providers for RoutingProviderUnavailable logic
+            if (
+                option in _EXTERNAL_API_OPTIONS
+                and "currently unavailable" in why
+            ):
+                dead_providers_skipped.append(option.value)
+                logger.emit(
+                    {
+                        "type": EvidenceType.ROUTE_FALLBACK.value,
+                        "data": {
+                            "skipped_provider": option.value,
+                            "reason": "provider_unavailable",
+                            "task": task,
+                        },
+                    },
+                    organ="route",
+                )
             continue
 
         chosen = option
@@ -110,6 +164,14 @@ def dispatch(
         break
 
     if chosen is None:
+        # If we skipped dead providers and no local option was available, raise
+        # a more specific RoutingProviderUnavailable rather than NoRouteAvailable.
+        if dead_providers_skipped:
+            raise RoutingProviderUnavailable(
+                f"All preferred providers are unavailable for task={task!r}: "
+                f"{dead_providers_skipped}",
+                reason="no fallback route available after dead provider(s) skipped",
+            )
         raise NoRouteAvailable(
             f"No viable route for task={task!r} with policy preferences "
             f"{[o.value for o in policy.preference_order]}",
@@ -122,15 +184,26 @@ def dispatch(
 
     receipt = _build_receipt(task, chosen, input_text)
 
+    # Budget enforcement before committing the route
+    if (
+        cost_tracker is not None
+        and hasattr(cost_tracker, "monthly_limit_usd")
+        and cost_tracker.monthly_limit_usd
+    ):
+        estimated = _estimate_cost(chosen, input_text)
+        cost_tracker.check_budget(estimated)
+
     logger.emit(
         {
             "type": EvidenceType.ROUTE_DECISION.value,
             "data": {
                 "task": task,
                 "route": chosen.value,
+                "provider_name": _provider_name(chosen),
                 "endpoint_url": endpoint_url,
                 "reason": reason,
                 "privacy_tier": policy.privacy_tier.value,
+                "providers_available": [o.value for o in policy.preference_order],
             },
         },
         organ="route",
@@ -151,6 +224,25 @@ def dispatch(
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+def _provider_name(option: RoutingOption) -> str:
+    """Return the canonical provider name for an evidence record."""
+    return {
+        RoutingOption.API_HAIKU: "anthropic",
+        RoutingOption.API_SONNET: "anthropic",
+        RoutingOption.API_DEEPSEEK: "deepseek",
+        RoutingOption.API_GPT5_MINI: "openai",
+        RoutingOption.LOCAL_SPECIALIST: "local",
+        RoutingOption.LOCAL_GENERALIST: "local",
+    }.get(option, "unknown")
+
+
+def _estimate_cost(option: RoutingOption, input_text: str) -> float:
+    """Estimate cost in USD for routing the given input to the given option."""
+    token_estimate = max(1, len(input_text.split()))
+    cost_per_1k = _API_COST_PER_1K.get(option, 0.0)
+    return (token_estimate / 1000.0) * cost_per_1k
+
+
 def _is_viable(
     option: RoutingOption,
     policy: RoutingPolicy,
@@ -170,6 +262,8 @@ def _is_viable(
             return False, (
                 f"privacy tier {policy.privacy_tier.value!r} forbids external API"
             )
+        if not _is_provider_alive(option):
+            return False, f"provider {option.value} is currently unavailable"
         return True, f"external API {option.value} available"
 
     return False, f"unknown routing option: {option.value}"
@@ -215,4 +309,4 @@ def _build_receipt(task: str, option: RoutingOption, input_text: str) -> CostRec
     )
 
 
-__all__ = ["dispatch"]
+__all__ = ["dispatch", "_DEAD_PROVIDERS"]

@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Dict, List, Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
-from dojo.core.exceptions import DojoError
+from dojo.core.exceptions import DojoError, SovereignHalt
 from .evidence_sovereign import EvidenceSovereign
 
 
@@ -67,7 +67,33 @@ class PrefetchGovernor:
     def issue_prefetch(self, layer_list: List[str]) -> PrefetchResult:
         if not layer_list:
             raise PrefetchGovernorError("layer_list cannot be empty")
-        if len(self.pending) + len(layer_list) > self.max_lookahead:
+
+        total_requested = len(self.pending) + len(layer_list)
+
+        # Constitutional hard-limit: total pending + new must not exceed MAX_LOOKAHEAD (16)
+        # This fires SovereignHalt regardless of the configured max_lookahead.
+        if total_requested > self.MAX_LOOKAHEAD:
+            self._sovereign.trigger_halt(
+                f"Lookahead exceeded: {len(self.pending)} pending + {len(layer_list)} new > {self.MAX_LOOKAHEAD}"
+            )
+            self.evidence.emit(
+                {
+                    "type": EvidenceType.SOVEREIGN_HALT.value,
+                    "data": {
+                        "event": "sovereign_halt",
+                        "lookahead_requested": total_requested,
+                        "max_lookahead": self.MAX_LOOKAHEAD,
+                    },
+                },
+                organ="stream",
+            )
+            raise SovereignHalt(
+                f"SovereignHalt: lookahead of {total_requested} exceeds constitutional max {self.MAX_LOOKAHEAD}",
+                reason=f"pending={len(self.pending)}, requested={len(layer_list)}, max={self.MAX_LOOKAHEAD}",
+            )
+
+        # Instance-level window check: respect the configured max_lookahead
+        if total_requested > self.max_lookahead:
             self._sovereign.trigger_halt("Lookahead window overrun")
             raise PrefetchGovernorError("Lookahead window overrun: exceeded constitutional CPU/RAM headroom")
 
@@ -104,3 +130,32 @@ class PrefetchGovernor:
 
     def get_stats(self) -> Dict[str, int]:
         return {"prefetches_issued": self._prefetches_issued, "pending_count": len(self.pending)}
+
+    def simulate_512_token_inference(
+        self,
+        layers_per_step: int = 3,
+        n_steps: int = 8,
+    ) -> Dict[str, int]:
+        """Simulate n_steps inference steps, each prefetching layers_per_step layers.
+
+        Pending queue is cleared after each successful step (layers were "processed").
+        Returns stats: {"steps": n, "prefetches_issued": k, "halts_triggered": j}
+        """
+        halts = 0
+        total_prefetches = 0
+
+        for step in range(n_steps):
+            layers = [f"layer_{step * layers_per_step + i}" for i in range(layers_per_step)]
+            try:
+                self.issue_prefetch(layers)
+                total_prefetches += len(layers)
+                # Consume pending to simulate processing
+                self.pending.clear()
+            except SovereignHalt:
+                halts += 1
+
+        return {
+            "steps": n_steps,
+            "prefetches_issued": total_prefetches,
+            "halts_triggered": halts,
+        }

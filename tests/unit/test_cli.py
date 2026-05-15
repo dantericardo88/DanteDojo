@@ -1,6 +1,7 @@
 """Unit tests for dojo/cli/main.py."""
 
 import json
+from datetime import UTC
 from unittest.mock import patch
 
 import pytest
@@ -115,6 +116,55 @@ class TestStreamCommands:
 
 
 # ---------------------------------------------------------------------------
+# idle-train
+# ---------------------------------------------------------------------------
+
+class TestIdleTrainCommand:
+    def test_idle_train_appears_in_help(self):
+        result = runner.invoke(app, ["--help"])
+        assert result.exit_code == 0
+        assert "idle-train" in result.output
+
+    def test_idle_train_json_output(self, tmp_path):
+        from dojo.idle.daemon import IdleTrainResult
+
+        fake_result = IdleTrainResult(
+            status="completed",
+            pack_id="pack-001",
+            base_model="qwen/qwen2-0.5b",
+            steps_completed=1,
+            resumed_from_step=0,
+            checkpoints_saved=1,
+            paused_reasons=[],
+            evidence_merkle_root="a" * 64,
+            wall_time_seconds=0.01,
+            pause_latency_seconds=0.0,
+        )
+
+        with patch("dojo.idle.daemon.IdleTrainingDaemon.run", return_value=fake_result):
+            result = runner.invoke(
+                app,
+                [
+                    "idle-train",
+                    "qwen/qwen2-0.5b",
+                    "--pack",
+                    "pack-001",
+                    "--output-dir",
+                    str(tmp_path),
+                    "--max-optimizer-steps",
+                    "1",
+                    "--json",
+                ],
+            )
+
+        assert result.exit_code == 0
+        parsed = json.loads(result.output)
+        assert parsed["status"] == "completed"
+        assert parsed["steps_completed"] == 1
+        assert parsed["evidence_merkle_root"] == "a" * 64
+
+
+# ---------------------------------------------------------------------------
 # registry
 # ---------------------------------------------------------------------------
 
@@ -152,7 +202,7 @@ class TestExperimentCommands:
 
 class TestPromoteCommand:
     def test_promote_success(self):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         from dojo.core.types import ConstitutionalPassport
         mock_passport = ConstitutionalPassport(
@@ -163,8 +213,8 @@ class TestPromoteCommand:
             dojo_check_receipt=b"d",
             forge_check_receipt=b"f",
             merkle_root="abc123",
-            issued_at=datetime.now(timezone.utc),
-            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+            issued_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(days=90),
             revocation_url="http://127.0.0.1:8002/v1/passport/revoke",
         )
         with patch("dojo.promote.gate.promote", return_value=mock_passport):
@@ -177,7 +227,7 @@ class TestPromoteCommand:
         assert "Passport issued" in result.output
 
     def test_promote_json(self):
-        from datetime import datetime, timedelta, timezone
+        from datetime import datetime, timedelta
 
         from dojo.core.types import ConstitutionalPassport
         mock_passport = ConstitutionalPassport(
@@ -188,8 +238,8 @@ class TestPromoteCommand:
             dojo_check_receipt=b"d",
             forge_check_receipt=b"f",
             merkle_root="deadbeef",
-            issued_at=datetime.now(timezone.utc),
-            expires_at=datetime.now(timezone.utc) + timedelta(days=90),
+            issued_at=datetime.now(UTC),
+            expires_at=datetime.now(UTC) + timedelta(days=90),
             revocation_url="http://127.0.0.1:8002/v1/passport/revoke",
         )
         with patch("dojo.promote.gate.promote", return_value=mock_passport):

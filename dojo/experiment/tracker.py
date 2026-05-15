@@ -158,7 +158,7 @@ class ExperimentTracker:
         return run_id
 
     def log_params(self, params: Dict[str, Any]) -> None:
-        """Log a batch of parameters to the active run.
+        """Log a batch of parameters to the active run. Emits evidence for each call.
 
         Args:
             params: Dict of parameter name → value.
@@ -173,6 +173,19 @@ class ExperimentTracker:
         if self._in_memory_run is not None:
             for k, v in params.items():
                 self._in_memory_run.log_param(k, v)
+
+        EvidenceLogger.get_instance().emit(
+            {
+                "type": EvidenceType.EXPERIMENT_METRIC.value,
+                "data": {
+                    "run_id": self._active_run_id or "",
+                    "type": "param",
+                    "params": {k: str(v) for k, v in params.items()},
+                    "param_count": len(params),
+                },
+            },
+            organ="experiment",
+        )
 
     def log_metric(self, key: str, value: float, step: Optional[int] = None) -> None:
         """Log a metric value. Emits EXPERIMENT_METRIC evidence and logs to MLflow.
@@ -207,6 +220,66 @@ class ExperimentTracker:
             },
             organ="experiment",
         )
+
+    def log_metrics_batch(self, metrics: Dict[str, float], step: Optional[int] = None) -> None:
+        """Log multiple metrics at once. Each metric emits EXPERIMENT_METRIC evidence.
+
+        Args:
+            metrics: Dict of metric name → value.
+            step: Optional training step / epoch number applied to all metrics.
+        """
+        for key, value in metrics.items():
+            self.log_metric(key, value, step=step)
+
+    def log_metric_series(self, key: str, values: List[float], start_step: int = 0) -> None:
+        """Log a list of values as sequential steps. Emits one evidence event per value.
+
+        Args:
+            key: Metric name.
+            values: Ordered list of metric values.
+            start_step: Step index for the first value; increments by 1 per value.
+        """
+        for i, value in enumerate(values):
+            self.log_metric(key, value, step=start_step + i)
+
+    def get_run_summary(self) -> Dict[str, Any]:
+        """Return a summary dict for the active run.
+
+        Returns a dict with: run_id, status, param_count, metric_count, artifact_count.
+        Falls back to zeros when no active run exists.
+        """
+        if self._in_memory_run is not None:
+            r = self._in_memory_run
+            return {
+                "run_id": r.run_id,
+                "status": r.status,
+                "param_count": len(r.params),
+                "metric_count": len(r.metrics),
+                "artifact_count": len(r.artifacts),
+            }
+
+        if self._mlflow_available and self._mlflow_run is not None:
+            try:
+                mlflow = self._get_mlflow()
+                info = self._mlflow_run.info
+                data = mlflow.get_run(info.run_id).data
+                return {
+                    "run_id": info.run_id,
+                    "status": info.status,
+                    "param_count": len(data.params),
+                    "metric_count": len(data.metrics),
+                    "artifact_count": 0,
+                }
+            except Exception:
+                pass
+
+        return {
+            "run_id": self._active_run_id or "",
+            "status": "UNKNOWN",
+            "param_count": 0,
+            "metric_count": 0,
+            "artifact_count": 0,
+        }
 
     def log_artifact(self, local_path: Path, artifact_path: str = "") -> None:
         """Log a local file as an artifact.
@@ -301,4 +374,5 @@ class ExperimentTracker:
 __all__ = [
     "RunConfig",
     "ExperimentTracker",
+    "_InMemoryRun",
 ]

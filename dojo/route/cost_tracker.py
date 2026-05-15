@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
+from dojo.core.exceptions import BudgetExceeded
 from dojo.core.types import CostReceipt
 
 _DEFAULT_STORAGE = Path.home() / ".dante" / "cost_receipts.jsonl"
@@ -20,8 +21,13 @@ _DEFAULT_STORAGE = Path.home() / ".dante" / "cost_receipts.jsonl"
 class CostTracker:
     """Append-only JSONL cost receipt store with monthly aggregation."""
 
-    def __init__(self, storage_path: Optional[Path] = None) -> None:
+    def __init__(
+        self,
+        storage_path: Optional[Path] = None,
+        monthly_limit_usd: Optional[float] = None,
+    ) -> None:
         self._storage_path = storage_path or _DEFAULT_STORAGE
+        self.monthly_limit_usd = monthly_limit_usd
 
     # ------------------------------------------------------------------
     # Public API
@@ -79,6 +85,50 @@ class CostTracker:
             "local_displaced_usd": round(local_displaced, 6),
             "receipts": count,
         }
+
+    def check_budget(self, estimated_cost_usd: float) -> None:
+        """Check whether adding estimated_cost_usd would exceed the monthly limit.
+
+        Emits ROUTE_COST_RECEIPT evidence with budget status regardless of outcome.
+        Raises BudgetExceeded if the projected total would exceed monthly_limit_usd.
+
+        Args:
+            estimated_cost_usd: Estimated cost in USD for the pending request.
+
+        Raises:
+            BudgetExceeded: If current spend + estimated_cost_usd > monthly_limit_usd.
+        """
+        from datetime import date
+
+        now = date.today()
+        summary = self.monthly_summary(now.year, now.month)
+        projected = summary["total_cost_usd"] + estimated_cost_usd
+
+        logger = EvidenceLogger.get_instance()
+        logger.emit(
+            {
+                "type": EvidenceType.ROUTE_COST_RECEIPT.value,
+                "data": {
+                    "budget_check": True,
+                    "monthly_limit_usd": self.monthly_limit_usd,
+                    "current_spend_usd": summary["total_cost_usd"],
+                    "estimated_new_cost_usd": estimated_cost_usd,
+                    "projected_total_usd": projected,
+                    "status": "within_budget" if projected <= self.monthly_limit_usd else "over_budget",
+                },
+            },
+            organ="route",
+        )
+
+        if projected > self.monthly_limit_usd:
+            raise BudgetExceeded(
+                f"Request would exceed monthly budget: ${projected:.4f} > ${self.monthly_limit_usd:.4f}",
+                reason=(
+                    f"current=${summary['total_cost_usd']:.4f}, "
+                    f"estimated=${estimated_cost_usd:.6f}, "
+                    f"limit=${self.monthly_limit_usd:.4f}"
+                ),
+            )
 
     def load_receipts(self) -> list[CostReceipt]:
         """Load all receipts from JSONL storage.

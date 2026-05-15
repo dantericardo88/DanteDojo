@@ -179,6 +179,20 @@ class EvidenceType(str, Enum):
     TRAINING_COMPLETE = "train.finetune.completed"
     TRAINING_BACKEND_SELECTED = "train.finetune.backend.selected"
 
+    # GRPO reinforcement learning
+    GRPO_START = "train.grpo.started"
+    GRPO_STEP = "train.grpo.step"
+    GRPO_KL_CHECKED = "train.grpo.kl_checked"
+    GRPO_CHECKPOINT = "train.grpo.checkpoint.saved"
+    GRPO_COMPLETE = "train.grpo.completed"
+
+    # DPO reinforcement learning
+    DPO_START = "train.dpo.started"
+    DPO_STEP = "train.dpo.step"
+    DPO_REWARD_MARGIN_CHECKED = "train.dpo.reward_margin_checked"
+    DPO_CHECKPOINT = "train.dpo.checkpoint.saved"
+    DPO_COMPLETE = "train.dpo.completed"
+
     # Pack ingest
     PACK_IMPORT_START = "pack.import.start"
     PACK_SIGNATURE_VERIFIED = "pack.signature.verified"
@@ -199,12 +213,21 @@ class EvidenceType(str, Enum):
     ROUTE_DECISION = "route.decision"
     ROUTE_PRIVACY_BLOCKED = "route.privacy.blocked"
     ROUTE_COST_RECEIPT = "route.cost_receipt"
+    ROUTE_FALLBACK = "route.fallback"
 
     # Evaluation
     EVAL_START = "eval.start"
     EVAL_COMPLETE = "eval.complete"
     EVAL_CONTAMINATION = "eval.contamination_check"
     EVAL_JUDGE_DRIFT = "eval.judge_drift"
+    EVAL_LM_HARNESS_START = "eval.lm_harness.start"
+    EVAL_LM_HARNESS_COMPLETE = "eval.lm_harness.complete"
+
+    # Pack license
+    PACK_LICENSE_CHECKED = "pack.license.checked"
+
+    # Revocation
+    REVOCATION_CHECKED = "promote.revocation.checked"
 
     # Promotion gate
     PROMOTE_HARVEST_GREEN = "promote.harvest.green"
@@ -219,6 +242,9 @@ class EvidenceType(str, Enum):
     IDLE_WINDOW_DETECTED = "idle.detected"
     IDLE_INTERRUPTED = "idle.interrupted"
     IDLE_THERMAL_PAUSED = "idle.thermal.paused"
+    IDLE_TRAINING_RESUMED = "idle.training.resumed"
+    IDLE_CHECKPOINT_SAVED = "idle.checkpoint.saved"
+    IDLE_TRAINING_COMPLETED = "idle.training.completed"
     GRADIENT_ACCUMULATED = "idle.gradient_accumulated"
 
     # Layer streaming
@@ -227,10 +253,23 @@ class EvidenceType(str, Enum):
     KV_PAGE_STORED = "stream.kv.stored"
     PREFETCH_ISSUED = "stream.prefetch.issued"
     BLOCK_QUANTIZED = "stream.block.quantized"
+    SOVEREIGN_HALT = "stream.sovereign.halt"
 
     # Evidence chain
     EVIDENCE_CHAIN_SEALED = "evidence.chain_sealed"
     EVIDENCE_MERKLE_ROOT = "evidence.merkle_root"
+
+    # FSDP2 multi-GPU training
+    FSDP2_STATE_TRANSITION = "train.fsdp2.fsm.transition"
+    FSDP2_PROFILE_DETECTED = "train.fsdp2.profile.detected"
+    FSDP2_RANK_INITIALIZED = "train.fsdp2.rank.initialized"
+    FSDP2_MODEL_WRAPPED = "train.fsdp2.model.wrapped"
+    FSDP2_OPTIMIZER_READY = "train.fsdp2.optimizer.ready"
+    FSDP2_GRADIENT_SYNC = "train.fsdp2.gradient.sync"
+    FSDP2_CHECKPOINT_SAVED = "train.fsdp2.checkpoint.saved"
+    FSDP2_TRAINING_COMPLETE = "train.fsdp2.training.complete"
+    FSDP2_TRAINING_STEP = "train.fsdp2.step"
+    FSDP2_RANK_MERKLE_ROOT = "train.fsdp2.rank.merkle_root"
 
     # Experiment tracking
     EXPERIMENT_RUN_STARTED = "experiment.run.started"
@@ -340,6 +379,23 @@ class EvidenceLogger:
             )
             self._seq += 1
             EvidenceLogger._events.append({"run_id": self._run_id, "seq": seq, "at": at, "organ": organ, "evidence": evidence, "hash": h})
+        # If DanteForge decision store is configured, mirror this emit as a decision node.
+        import os as _os
+        _store_env = _os.getenv("DANTEFORGE_DECISION_STORE")
+        if _store_env:
+            try:
+                from dojo.core.time_machine_decision_node import record_decision_node
+                record_decision_node(
+                    project_root=".",
+                    session_id=_os.getenv("DANTEFORGE_DECISION_SESSION_ID", self._run_id),
+                    actor_id=organ,
+                    prompt=evidence.get("type", "unknown"),
+                    result=evidence.get("data", {}),
+                    success=True,
+                    evidence_ref=h,
+                )
+            except Exception:
+                pass
         return bundle
 
     def log_evidence(self, evidence: Dict[str, Any], organ: str = "core") -> EvidenceBundle:
