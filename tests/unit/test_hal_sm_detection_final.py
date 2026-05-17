@@ -378,18 +378,19 @@ def test_concurrent_detect_calls_do_not_raise():
     mock_pynvml = _build_pynvml_mock()
     errors: list[Exception] = []
 
-    def _call():
-        try:
-            with _inject_pynvml(mock_pynvml):
-                from dojo.hal import nvidia
-                nvidia._detect_via_pynvml()
-        except Exception as exc:
-            errors.append(exc)
+    with _inject_pynvml(mock_pynvml):
+        from dojo.hal import nvidia
 
-    threads = [threading.Thread(target=_call) for _ in range(4)]
-    for t in threads:
-        t.start()
-    for t in threads:
-        t.join()
+        def _call():
+            try:
+                nvidia._detect_via_pynvml()
+            except Exception as exc:
+                errors.append(exc)
+
+        threads = [threading.Thread(target=_call) for _ in range(4)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
     assert errors == [], f"Concurrent calls raised: {errors}"

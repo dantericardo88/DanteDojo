@@ -181,11 +181,11 @@ class TestExportAwqEvidence:
 
         with patch.dict(sys.modules, _inject_awq_mock(mock_awq)):
             from dojo.quant import awq as awq_module
-            # Force a 10% F1 drop (0.82 → 0.72) by overriding stub constants
-            with (
-                patch.object(awq_module, "_STUB_F1_BEFORE", 0.82),
-                patch.object(awq_module, "_STUB_F1_AFTER", 0.72),
-            ):
+            # Force a 10% F1 drop (0.82 → 0.72) by patching _measure_f1 directly.
+            # Patching _STUB_F1_BEFORE/_STUB_F1_AFTER is not enough — those are only
+            # used when _compute_mock_f1() raises, but torch is available in CI so
+            # the real mock-F1 path runs instead.
+            with patch.object(awq_module, "_measure_f1", return_value=(0.82, 0.72)):
                 with pytest.raises(QuantQualityRejected):
                     awq_module.export_awq(
                         model_path=model_dir,
@@ -218,10 +218,7 @@ class TestExportAwqQualityGate:
 
         with patch.dict(sys.modules, _inject_awq_mock(mock_awq)):
             from dojo.quant import awq as awq_module
-            with (
-                patch.object(awq_module, "_STUB_F1_BEFORE", 0.82),
-                patch.object(awq_module, "_STUB_F1_AFTER", 0.72),
-            ):
+            with patch.object(awq_module, "_measure_f1", return_value=(0.82, 0.72)):
                 with pytest.raises(QuantQualityRejected) as exc_info:
                     awq_module.export_awq(
                         model_path=model_dir,

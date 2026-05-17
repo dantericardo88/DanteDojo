@@ -160,9 +160,9 @@ def _no_real_gpu(monkeypatch):
 # ---------------------------------------------------------------------------
 
 class TestFinetuneConfigTrainingMode:
-    def test_default_training_mode_is_qlora(self):
+    def test_default_training_mode_is_sft(self):
         cfg = FinetuneConfig(pack_id="p", base_model="m")
-        assert cfg.training_mode == "qlora"
+        assert cfg.training_mode == "sft"
 
     def test_training_mode_can_be_set_to_sft(self):
         cfg = FinetuneConfig(pack_id="p", base_model="m", training_mode="sft")

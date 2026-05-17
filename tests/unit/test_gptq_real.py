@@ -136,21 +136,13 @@ class TestExportGptqEvidence:
 
 class TestExportGptqPplRegressionRaises:
     def test_export_gptq_ppl_regression_raises(self, tmp_path, gptq_module_with_mock):
-        """Patch stub PPL values so after is 50% higher than before."""
+        """Patch _measure_ppl so after is 50% higher than before."""
         model_path = tmp_path / "my-model"
         model_path.mkdir()
         output_dir = tmp_path / "out"
 
         with patch.dict("os.environ", {"DOJO_REAL_GPU": "0"}):
-            with patch.object(
-                gptq_module_with_mock,
-                "_STUB_PPL_BEFORE",
-                20.0,
-            ), patch.object(
-                gptq_module_with_mock,
-                "_STUB_PPL_AFTER",
-                30.0,  # 50% regression
-            ):
+            with patch.object(gptq_module_with_mock, "_measure_ppl", return_value=(20.0, 30.0)):
                 with pytest.raises(QuantQualityRejected) as exc_info:
                     gptq_module_with_mock.export_gptq(
                         model_path=model_path,
@@ -172,8 +164,7 @@ class TestExportGptqPplRegressionEvidence:
         output_dir = tmp_path / "out"
 
         with patch.dict("os.environ", {"DOJO_REAL_GPU": "0"}):
-            with patch.object(gptq_module_with_mock, "_STUB_PPL_BEFORE", 20.0), \
-                 patch.object(gptq_module_with_mock, "_STUB_PPL_AFTER", 30.0):
+            with patch.object(gptq_module_with_mock, "_measure_ppl", return_value=(20.0, 30.0)):
                 with pytest.raises(QuantQualityRejected):
                     gptq_module_with_mock.export_gptq(
                         model_path=model_path,
