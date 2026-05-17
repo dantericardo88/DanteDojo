@@ -196,7 +196,8 @@ class VLLMBackend:
         max_tokens: int = 64,
         temperature: float = 0.0,
         stop: Optional[list] = None,
-    ) -> str:
+        stream: bool = False,
+    ) -> "str | list[dict]":
         """Generate a completion for a single prompt.
 
         Args:
@@ -204,14 +205,26 @@ class VLLMBackend:
             max_tokens: Maximum tokens to generate.
             temperature: Sampling temperature (0.0 = greedy).
             stop: Optional list of stop sequences.
+            stream: If True, return a list of SSE-style chunk dicts instead of
+                a plain string.  Each chunk has the shape
+                ``{"choices": [{"delta": {"content": str, "role": str},
+                "finish_reason": str | None}]}``.
+                The final chunk has ``finish_reason="stop"``.
 
         Returns:
-            Generated text as a string.
+            Generated text string when ``stream=False`` (default), or a list
+            of streaming chunk dicts when ``stream=True``.
 
         Raises:
             BackendUnavailable: if vllm is not installed.
-            ServeError: if the engine is not running in real-GPU mode.
         """
+        if stream:
+            return self._generate_stream(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stop=stop,
+            )
         results = self.batch_generate(
             [prompt],
             max_tokens=max_tokens,
@@ -220,6 +233,87 @@ class VLLMBackend:
         )
         return results[0]
 
+    def _generate_stream(
+        self,
+        prompt: str,
+        *,
+        max_tokens: int = 64,
+        temperature: float = 0.0,
+        stop: Optional[list] = None,
+    ) -> list:
+        """Return a list of SSE-style chunk dicts simulating streaming output.
+
+        Each chunk (except the last) has ``finish_reason=None`` and
+        ``delta={"role": "assistant", "content": <token>}``.
+        The last chunk has ``finish_reason="stop"`` and empty content.
+
+        When a stop sequence is found inside the stub text, generation halts
+        at that point and ``serve.vllm_stop_sequence`` evidence is emitted.
+        """
+        _require_vllm()
+
+        evidence_log = EvidenceLogger.get_instance()
+        stop_seqs: list = stop or []
+
+        # Build stub output text
+        stub_text = f"[stub stream for: {prompt[:40]}]"
+
+        # Check for stop-sequence match in stub text
+        matched_stop: Optional[str] = None
+        truncated_text = stub_text
+        for seq in stop_seqs:
+            if seq and seq in stub_text:
+                idx = stub_text.index(seq)
+                truncated_text = stub_text[:idx]
+                matched_stop = seq
+                break
+
+        if matched_stop is not None:
+            evidence_log.emit(
+                {
+                    "type": EvidenceType.SERVE_VLLM_STOP_SEQUENCE.value,
+                    "data": {
+                        "backend": "vllm",
+                        "stop_sequence": matched_stop,
+                        "model_path": str(self._model_path),
+                    },
+                },
+                organ="serve",
+            )
+
+        # Split into word-level tokens for realistic multi-chunk output
+        tokens = truncated_text.split() if truncated_text else []
+
+        chunks: list = []
+        for i, token in enumerate(tokens):
+            content = token if i == 0 else " " + token
+            chunk: dict = {
+                "choices": [
+                    {
+                        "delta": {
+                            "role": "assistant" if i == 0 else "",
+                            "content": content,
+                        },
+                        "finish_reason": None,
+                    }
+                ]
+            }
+            chunks.append(chunk)
+
+        # Final chunk: finish_reason="stop", empty content
+        chunks.append(
+            {
+                "choices": [
+                    {
+                        "delta": {"role": "", "content": ""},
+                        "finish_reason": "stop",
+                    }
+                ]
+            }
+        )
+
+        return chunks
+
     def batch_generate(
         self,
         prompts: list,
@@ -227,6 +321,7 @@ class VLLMBackend:
         max_tokens: int = 64,
         temperature: float = 0.0,
         stop: Optional[list] = None,
+        max_tokens_per_prompt: Optional[list] = None,
     ) -> list:
         """Generate completions for a batch of prompts.
 
@@ -236,9 +331,12 @@ class VLLMBackend:
 
         Args:
             prompts: List of input text prompts.
-            max_tokens: Maximum tokens to generate per prompt.
+            max_tokens: Default maximum tokens to generate per prompt.
             temperature: Sampling temperature.
             stop: Optional list of stop sequences.
+            max_tokens_per_prompt: Optional per-prompt max_tokens overrides.
+                If provided, ``max_tokens_per_prompt[i]`` overrides ``max_tokens``
+                for prompt ``i``.  List length must match ``prompts``.
 
         Returns:
             List of generated text strings, one per prompt.
@@ -265,7 +363,13 @@ class VLLMBackend:
         )
 
         if _real_gpu_mode() and self._engine is not None:
-            outputs = self._run_engine_batch(prompts, max_tokens=max_tokens, temperature=temperature, stop=stop)
+            outputs = self._run_engine_batch(
+                prompts,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                stop=stop,
+                max_tokens_per_prompt=max_tokens_per_prompt,
+            )
         else:
             # Stub mode: return synthetic completions
             outputs = [f"[stub completion for: {p[:40]}]" for p in prompts]
@@ -335,10 +439,18 @@ class VLLMBackend:
         max_tokens: int = 64,
         temperature: float = 0.0,
         stop: Optional[list] = None,
+        max_tokens_per_prompt: Optional[list] = None,
     ) -> list:
         """Send prompts to the AsyncLLMEngine and collect outputs.
 
         Only called in real-GPU mode when ``self._engine`` is set.
+
+        Args:
+            prompts: List of input text prompts.
+            max_tokens: Default max tokens per prompt.
+            temperature: Sampling temperature.
+            stop: Optional stop sequences.
+            max_tokens_per_prompt: Optional per-prompt max_tokens overrides.
         """
         import asyncio
         import uuid as _uuid
@@ -347,18 +459,24 @@ class VLLMBackend:
 
         async def _run() -> list:
             from vllm import SamplingParams  # type: ignore[import]
-            sp = SamplingParams(
-                max_tokens=max_tokens,
-                temperature=temperature,
-                stop=stop or [],
-            )
             outputs = []
-            for prompt in prompts:
+            for i, prompt in enumerate(prompts):
+                per_max = (
+                    max_tokens_per_prompt[i]
+                    if max_tokens_per_prompt and i < len(max_tokens_per_prompt)
+                    else max_tokens
+                )
+                sp = SamplingParams(
+                    max_tokens=per_max,
+                    temperature=temperature,
+                    stop=stop or [],
+                )
                 req_id = _uuid.uuid4().hex
-                results_gen = engine.generate(prompt, sp, req_id)
+                results_gen = engine.generate(prompt, sp, req_id)  # type: ignore[union-attr]
+                req_output = None
                 async for req_output in results_gen:
                     pass  # consume until done
-                text = req_output.outputs[0].text if req_output.outputs else ""
+                text = req_output.outputs[0].text if req_output and req_output.outputs else ""
                 outputs.append(text)
             return outputs
 
@@ -371,7 +489,7 @@ class VLLMBackend:
                     return fut.result(timeout=120)
             return loop.run_until_complete(_run())
         except Exception:
-            return [f"[engine error for prompt]" for _ in prompts]
+            return ["[engine error for prompt]" for _ in prompts]
 
     def _build_command(self) -> list[str]:
         """Build the vLLM server launch command list."""

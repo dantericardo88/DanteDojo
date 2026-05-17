@@ -154,5 +154,18 @@ class BlockQuantizer:
         self.evidence.info({"type": EvidenceType.BLOCK_QUANTIZED.value, "data": {"precision": precision}}, organ="stream")
         return result_tensor
 
+    def quantize(
+        self,
+        block_id: str = "",
+        weight_tensor: Any = None,
+        precision: str = "4-bit",
+        format: str = "NF4",
+    ) -> "QuantizeResult":
+        """Unified quantize entry point dispatching to quantize_block or quantize_tensor."""
+        if weight_tensor is not None:
+            self.quantize_tensor(weight_tensor, precision=precision)
+        raw = block_id or "block"
+        return self.quantize_block(raw_block=raw, format=format, precision=precision)
+
     def get_stats(self) -> Dict[str, int]:
         return {"blocks_quantized": self._blocks_quantized}

@@ -6,6 +6,7 @@ Raises QuantizationError if bitsandbytes is not installed.
 
 from __future__ import annotations
 
+from dojo.core.evidence import EvidenceLogger
 from dojo.core.exceptions import QuantizationError
 
 _INSTALL_INSTRUCTIONS = (
@@ -35,12 +36,29 @@ def get_bnb_nf4_config() -> dict:
 
     import torch  # noqa: F401 — bitsandbytes requires torch
 
-    return {
+    cfg = {
         "load_in_4bit": True,
         "bnb_4bit_quant_type": "nf4",
         "bnb_4bit_use_double_quant": True,
         "bnb_4bit_compute_dtype": "bfloat16",
     }
+
+    # Emit evidence so QLoRA callers can audit the NF4 config selection.
+    logger = EvidenceLogger.get_instance()
+    logger.emit(
+        {
+            "type": "quant.nf4_config",
+            "data": {
+                "load_in_4bit": cfg["load_in_4bit"],
+                "bnb_4bit_quant_type": cfg["bnb_4bit_quant_type"],
+                "bnb_4bit_use_double_quant": cfg["bnb_4bit_use_double_quant"],
+                "bnb_4bit_compute_dtype": cfg["bnb_4bit_compute_dtype"],
+            },
+        },
+        organ="quant",
+    )
+
+    return cfg
 
 
 # ---------------------------------------------------------------------------

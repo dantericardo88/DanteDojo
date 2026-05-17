@@ -202,6 +202,10 @@ def create_app(backend_url: str, model_id: str, passport_id: str = "") -> Any:
         request_id = uuid.uuid4().hex
         start_time = time.monotonic()
 
+        # Estimate prompt_tokens from messages before dispatching
+        prompt_text = _messages_to_prompt(request.messages)
+        prompt_tokens_est = len(prompt_text.split())
+
         logger.emit(
             {
                 "type": EvidenceType.SERVE_START.value,
@@ -209,6 +213,20 @@ def create_app(backend_url: str, model_id: str, passport_id: str = "") -> Any:
                     "request_id": request_id,
                     "model": request.model,
                     "message_count": len(request.messages),
+                    "stream": request.stream,
+                    "prompt_tokens": prompt_tokens_est,
+                },
+            },
+            organ="serve",
+        )
+        # Canonical serve.request_start evidence (with required fields for d29)
+        logger.emit(
+            {
+                "type": "serve.request_start",
+                "data": {
+                    "request_id": request_id,
+                    "model": request.model,
+                    "prompt_tokens": prompt_tokens_est,
                     "stream": request.stream,
                 },
             },
@@ -227,6 +245,7 @@ def create_app(backend_url: str, model_id: str, passport_id: str = "") -> Any:
                 response = await _complete_from_backend(backend_url, request)
 
                 latency_ms = (time.monotonic() - start_time) * 1000
+                total_tokens = response.get("usage", {}).get("total_tokens", 0)
                 logger.emit(
                     {
                         "type": EvidenceType.SERVE_READY.value,
@@ -236,6 +255,20 @@ def create_app(backend_url: str, model_id: str, passport_id: str = "") -> Any:
                             "tokens_generated": response.get("usage", {}).get(
                                 "completion_tokens", 0
                             ),
+                        },
+                    },
+                    organ="serve",
+                )
+                # Canonical serve.request_complete evidence (with required fields for d29)
+                logger.emit(
+                    {
+                        "type": "serve.request_complete",
+                        "data": {
+                            "request_id": request_id,
+                            "model": request.model,
+                            "prompt_tokens": prompt_tokens_est,
+                            "total_tokens": total_tokens,
+                            "latency_ms": round(latency_ms, 2),
                         },
                     },
                     organ="serve",
@@ -359,11 +392,25 @@ async def _stream_from_backend(
         )
 
     latency_ms = (time.monotonic() - start_time) * 1000
+    prompt_tokens_est = len(_messages_to_prompt(request.messages).split())
     logger.emit(
         {
             "type": EvidenceType.SERVE_READY.value,
             "data": {
                 "request_id": request_id,
+                "tokens_generated": tokens_generated,
+                "latency_ms": round(latency_ms, 2),
+            },
+        },
+        organ="serve",
+    )
+    logger.emit(
+        {
+            "type": "serve.request_complete",
+            "data": {
+                "request_id": request_id,
+                "model": request.model,
+                "prompt_tokens": prompt_tokens_est,
                 "tokens_generated": tokens_generated,
                 "latency_ms": round(latency_ms, 2),
             },

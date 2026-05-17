@@ -210,6 +210,7 @@ class EvidenceType(str, Enum):
     SERVE_STOPPED = "serve.stopped"
     SERVE_VLLM_BATCH_START = "serve.vllm_batch_start"
     SERVE_VLLM_BATCH_COMPLETE = "serve.vllm_batch_complete"
+    SERVE_VLLM_STOP_SEQUENCE = "serve.vllm_stop_sequence"
 
     # Routing
     ROUTE_DECISION = "route.decision"

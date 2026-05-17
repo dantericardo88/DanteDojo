@@ -49,9 +49,16 @@ class LlamaCppBackend:
             PID of the launched process (stub PID when not in real-GPU mode).
 
         Raises:
+            ServeError: if model_path does not exist.
             BackendUnavailable: if llama_cpp is not installed.
             ServerStartError: if the subprocess fails to start.
         """
+        if not self._model_path.exists():
+            raise ServeError(
+                f"Model path not found: {self._model_path}",
+                reason="model_path does not exist",
+            )
+
         _require_llama_cpp()
 
         cmd = self._build_command()
@@ -73,6 +80,21 @@ class LlamaCppBackend:
                 ) from exc
         else:
             self._pid = _stub_pid()
+
+        logger = EvidenceLogger.get_instance()
+        logger.emit(
+            {
+                "type": "serve.llamacpp_loaded",
+                "data": {
+                    "model_path": str(self._model_path),
+                    "port": self._port,
+                    "context_length": 2048,
+                    "n_gpu_layers": self._n_gpu_layers,
+                    "pid": self._pid,
+                },
+            },
+            organ="serve",
+        )
 
         return self._pid
 
