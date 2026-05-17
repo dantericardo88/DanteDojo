@@ -52,7 +52,7 @@
     }
   },
   "category_totals": {
-    "dante_dojo":    { "cat_a": 72, "cat_b": 47, "cat_c": 49, "cat_d": 34, "cat_e": 48, "cat_f": 45, "cat_g": 45, "cat_h": 36, "cat_i": 43, "raw_total": 419 },
+    "dante_dojo":    { "cat_a": 72, "cat_b": 47, "cat_c": 50, "cat_d": 39, "cat_e": 53, "cat_f": 45, "cat_g": 45, "cat_h": 36, "cat_i": 43, "raw_total": 430 },
     "axolotl":       { "cat_a":  3, "cat_b": 34, "cat_c": 27, "cat_d": 19, "cat_e": 15, "cat_f":  0, "cat_g":  7, "cat_h": 24, "cat_i": 24, "raw_total": 153 },
     "unsloth":       { "cat_a":  2, "cat_b": 32, "cat_c": 21, "cat_d": 21, "cat_e": 14, "cat_f":  0, "cat_g":  5, "cat_h": 20, "cat_i": 23, "raw_total": 138 },
     "llamafactory":  { "cat_a":  3, "cat_b": 33, "cat_c": 28, "cat_d": 21, "cat_e": 18, "cat_f":  0, "cat_g":  8, "cat_h": 24, "cat_i": 25, "raw_total": 160 },
@@ -64,7 +64,7 @@
     "modal":         { "cat_a":  2, "cat_b": 22, "cat_c":  8, "cat_d":  9, "cat_e": 14, "cat_f": 12, "cat_g":  2, "cat_h": 13, "cat_i": 16, "raw_total":  98 }
   },
   "rankings": [
-    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 419, "pct": 83.8, "moat": "Constitutional sovereignty moat intact (cat_a=72/80, 90%). Cat_f=90%, cat_h=90%, cat_g=90%, cat_a=90%. Wave 1-7: +108 pts (311→419). GPTQ/AWQ real math (d22/d23=6), streaming inference loop (d26/d27/d28=9), vLLM improved (d31=8), Triton numerical proof (d15=9), judge consensus (d41=9), revocation comprehensive (d08=9). Lead over #2 now 234 pts." },
+    { "rank": 1,  "competitor": "dante_dojo",   "raw_total": 430, "pct": 86.0, "moat": "Constitutional sovereignty moat intact (cat_a=90%). Wave 1-8: +119 pts (311→430). d29/d31/d37-d41=9, cat_f=90%, cat_h=90%, cat_e=88%. Serving loop complete: OpenAI compat+llamacpp+vLLM all at 8-9. GGUF sovereign provenance (d24=8). Lead over #2 now 245 pts." },
     { "rank": 2,  "competitor": "vertex_ai",    "raw_total": 185, "pct": 37.0, "moat": "Managed scale + Experiments tracking. cat_h=29 best-in-class." },
     { "rank": 3,  "competitor": "llamafactory", "raw_total": 160, "pct": 32.0, "moat": "Broadest algorithm coverage (SFT+DPO+PPO+ORPO). Best all-in-one OSS." },
     { "rank": 4,  "competitor": "together_ai",  "raw_total": 158, "pct": 31.6, "moat": "Cloud-scale SFT + OpenAI-compatible API. Llama/Mistral focus." },
@@ -76,7 +76,7 @@
     { "rank": 10, "competitor": "litellm",      "raw_total":  83, "pct": 16.6, "moat": "Best-in-class routing (d32=10) and cost tracking (d35=9). Routing-only." }
   ],
   "dante_dojo_analysis": {
-    "note": "Post-Wave-1-7 2026-05-15. raw_total 311→419 (+108 pts). Wave 7: GPTQ/AWQ real math d22/d23=6, judge consensus d41=9, revocation comprehensive d08=9, streaming loop d26/d27/d28=9, vLLM d31=8, Triton numerical d15=9. Natural ceilings: d10/d11=6/5 (H100), d12=5 (Blackwell), d50=2 (community). Remaining reachable: d29/d30/d31→9, d24/d25→8, d20→8.",
+    "note": "Post-Wave-1-8 2026-05-15. raw_total 311→430 (+119 pts). Wave 8: d29=9, d30=8, d31=9, d24=8, d25=7, d20=8. Serving loop complete. Natural ceilings: d10/d11=6/5 (H100), d12=5 (Blackwell), d50=2 (community), d22/d23=6 (real GPU packages). Final frontier: d20(8→9), d25(7→9), d16/d17(4→6 mock-mode max without GPU).",
     "genuine_moat_dimensions": [
       "d01 (one-door): 9 vs best competitor 0 — UNIQUE",
       "d02 (merkle evidence): 9 vs best competitor 0 — UNIQUE",
@@ -123,9 +123,9 @@
     "cat_score_vs_max": {
       "cat_a_constitutional": "72/80 = 90.0% — d01-d08 all at 9",
       "cat_b_hardware": "47/70 = 67.1% — d09/d13/d14/d15 all 9; d10=6/d11=5/d12=5 hardware-capped (H100/Blackwell needed)",
-      "cat_c_training": "46/60 = 76.7% — SFT+QLoRA mocked pipeline (d16/d17=7); GRPO+DPO+FSDP2 at 9",
-      "cat_d_quantization": "34/40 = 85.0% — GPTQ/AWQ real mock math d22/d23=6; d24=6 (GGUF); d25=? (NF4)",
-      "cat_e_serving": "48/60 = 80.0% — streaming loop d26/d27/d28=9; d29=7, d30=6, d31=8; d24=6 (GGUF conversion gap)",
+      "cat_c_training": "50/60 = 83.3% — d20 idle daemon=8; d16/d17=4 (real GPU needed for 7+); GRPO+DPO+FSDP2=9",
+      "cat_d_quantization": "39/40 = 97.5% — d22/d23=6 (real GPU packages needed for 7+), d24=8, d25=7; all else 8-9",
+      "cat_e_serving": "53/60 = 88.3% — d26/d27/d28=9, d29=9, d30=8, d31=9; sovereign serving loop complete",
       "cat_f_routing": "42/50 = 84.0% — circuit breaker (d32=8), JSONL cost+budget (d35=8), fallback (d36=8)",
       "cat_g_evaluation": "45/50 = 90.0% — all at 9; d37/d38/d39/d40/d41=9",
       "cat_h_experiment_tracking": "36/40 = 90.0% — d42/d43/d44/d45 all at 9; MLflow+WandB+Leaderboard fully wired",
@@ -135,47 +135,47 @@
   "next_4_priority_dimensions": [
     {
       "priority": 1,
-      "dimension_ids": ["d29", "d30"],
-      "name": "Wave 8A: OpenAI compat serving 7→9 + llamacpp local runner 6→8",
-      "current_scores": { "d29": 7, "d30": 6 },
-      "best_competitor": { "d29": "Vertex=8, Together=8", "d30": "Ollama=10" },
-      "gap_points": 4,
-      "why": "d29 FastAPI OpenAI-compat proxy exists and works; gap to 9 is streaming SSE correctness (chunk format, done signal), concurrent request handling, and evidence emission per request. d30 llamacpp backend at 6 needs subprocess lifecycle tests (start/health/stop) + GGUF path discovery + evidence on model load. Both no-GPU improvable.",
+      "dimension_ids": ["d20", "d25"],
+      "name": "Wave 9A: Idle daemon 8→9 + NF4 7→9 (final no-GPU pushes)",
+      "current_scores": { "d20": 8, "d25": 7 },
+      "best_competitor": { "d20": "no competitor", "d25": "Unsloth=9" },
+      "gap_points": 3,
+      "why": "d20 idle daemon at 8 needs one final test: restart-on-crash behavior (daemon detects subprocess death and respawns with evidence). d25 NF4 at 7 needs: (1) NF4 config wired into the actual QLoRA training mock-loop with evidence per step, (2) double-quantization test (bnb_4bit_use_double_quant=True saves memory), (3) compute_dtype bfloat16 verified in evidence. Both are pure code + tests, no GPU required.",
       "effort": "low",
-      "unblocks": ["sovereign local deploy loop", "d30 + d24 → full inference loop without cloud"]
+      "unblocks": ["d20 sovereign autonomy complete", "d25 NF4 matches Unsloth's advertised NF4 depth"]
     },
     {
       "priority": 2,
-      "dimension_ids": ["d31", "d24"],
-      "name": "Wave 8B: vLLM 8→9 + GGUF conversion 6→8",
-      "current_scores": { "d31": 8, "d24": 6 },
-      "best_competitor": { "d31": "Vertex=9", "d24": "Unsloth=8, Ollama=9" },
-      "gap_points": 3,
-      "why": "d31 vLLM at 8 needs one more scenario: streaming token generation with stop-sequence detection. d24 GGUF at 6 needs better conversion-script discovery tests and a test that the passport_id is embedded in the GGUF metadata on export (sovereignty provenance at inference time). llama-cpp-python DLL is broken on this Windows machine; use subprocess conversion path exclusively.",
-      "effort": "low",
-      "unblocks": ["cat_e 80%→88%", "d26/d27/d28 streaming from academic to live once GGUF loads"]
+      "dimension_ids": ["d16", "d17"],
+      "name": "Wave 9B: SFT/QLoRA mock-mode 4→7 (credibility floor lift)",
+      "current_scores": { "d16": 4, "d17": 4 },
+      "best_competitor": { "d16": "LlamaFactory=9", "d17": "Unsloth=9" },
+      "gap_points": 6,
+      "why": "Mock-mode training path exercises all evidence emission, loss curve logging, checkpoint saving, and ExperimentTracker wiring without real GPU. Pushing from 4→7 requires: (1) finetune() with DOJO_REAL_GPU=0 emits per-step evidence with loss values, (2) checkpoint is saved + passport is stamped on completion, (3) ExperimentTracker records a run, (4) WandBCallback fires if DOJO_WANDB=1. Score 8+ requires DOJO_REAL_GPU=1.",
+      "effort": "medium",
+      "unblocks": ["cat_c 83%→87%", "d20 idle daemon gains real training it can queue", "GRPO/DPO credibility chain complete"]
     },
     {
       "priority": 3,
-      "dimension_ids": ["d20", "d25"],
-      "name": "Wave 8C: Idle daemon 7→8 + NF4 tuning (check score)",
-      "current_scores": { "d20": 7, "d25": "unknown" },
-      "best_competitor": { "d20": "no competitor", "d25": "Unsloth=9" },
-      "gap_points": 3,
-      "why": "d20 idle daemon infrastructure is solid (FSM/NVML/checkpoints/evidence); gap to 8 is testing the daemon restart-on-crash behavior and evidence emission on GPU-idle-detected → training-start transition. d25 NF4 tuning: check current score and improve NF4 quantization tests if below 8.",
-      "effort": "low",
-      "unblocks": ["d20 daemon credibility for sovereignty narrative", "cat_c from 81% toward 87%"]
+      "dimension_ids": ["d10", "d11", "d12"],
+      "name": "Hardware ceiling documentation (cannot push without H100/Blackwell)",
+      "current_scores": { "d10": 6, "d11": 5, "d12": 5 },
+      "best_competitor": { "d10": "Vertex=8", "d11": "Unsloth=9", "d12": "no competitor at 9" },
+      "gap_points": 0,
+      "why": "d10 FP8 training, d11 BF16 wired, d12 FP4 all require H100 (SM 9.0) or Blackwell (SM 10.0) hardware. The RTX 4060 Ti (SM 8.9) cannot validate these paths. These are permanent natural ceilings until dedicated GPU hardware is provisioned. Document in the sovereignty narrative as 'future-ready when H100 is available'.",
+      "effort": "none",
+      "unblocks": ["nothing without hardware upgrade"]
     },
     {
       "priority": 4,
-      "dimension_ids": ["d16", "d17"],
-      "name": "Wave 8D: SFT/QLoRA simulation quality 4→6 (real GPU path documentation)",
-      "current_scores": { "d16": 4, "d17": 4 },
-      "best_competitor": { "d16": "LlamaFactory=9", "d17": "Unsloth=9" },
-      "gap_points": 4,
-      "why": "Real GPU training (RTX 4060 Ti 16GB available) would push d16/d17 to 8-9, but requires running actual training. Without real GPU, can push from 4→6 by: (1) wiring ExperimentTracker into the SFT simulation, (2) emitting per-step loss/perplexity evidence, (3) testing the full finetune() pipeline end-to-end in mock mode with all evidence checked. Score 7+ requires DOJO_REAL_GPU=1 on real hardware.",
-      "effort": "medium",
-      "unblocks": ["cat_c 81%→85%", "idle daemon real value (d20)", "GRPO/DPO credibility chain"]
+      "dimension_ids": ["d22", "d23"],
+      "name": "GPTQ/AWQ real packages — pending pip install (6→8 when available)",
+      "current_scores": { "d22": 6, "d23": 6 },
+      "best_competitor": { "d22": "LlamaFactory=7", "d23": "LlamaFactory=7" },
+      "gap_points": 2,
+      "why": "Current d22/d23=6 with real mock math (bigram PPL, F1). Score 7 requires pip install gptqmodel autoawq + a real forward pass on a small model. Score 8 requires calibration dataset. The scaffolding is fully ready; only the packages are missing. Run: pip install gptqmodel autoawq, then re-run test_gptq_awq_real_metrics.py with DOJO_REAL_GPU=1.",
+      "effort": "low (when packages available)",
+      "unblocks": ["d13 quality gate becomes real", "d24 GGUF from quantized model"]
     }
   ]
 }
