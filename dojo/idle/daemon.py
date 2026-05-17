@@ -29,6 +29,16 @@ from enum import Enum
 from pathlib import Path
 from typing import Callable, Optional, Tuple
 
+# ---------------------------------------------------------------------------
+# Crash-respawn constants
+# ---------------------------------------------------------------------------
+
+#: Number of seconds to wait before re-queueing after a subprocess crash.
+_RESPAWN_DELAY_SECONDS: float = 5.0
+
+#: Maximum number of consecutive crashes before the daemon enters FAILED state.
+MAX_CRASHES: int = 3
+
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.fsm import BaseFSM
 from dojo.idle.accumulator import GradientAccumulator
@@ -48,6 +58,7 @@ class DaemonState(Enum):
     CHECKPOINTING = "checkpointing"
     COMPLETED = "completed"
     PAUSED = "paused"
+    CRASHED = "crashed"
     FAILED = "failed"
 
 
@@ -68,6 +79,7 @@ class _DaemonFSM(BaseFSM[DaemonState]):
         DaemonState.TRAINING: frozenset({
             DaemonState.CHECKPOINTING,
             DaemonState.PAUSED,
+            DaemonState.CRASHED,
             DaemonState.FAILED,
         }),
         DaemonState.CHECKPOINTING: frozenset({
@@ -75,6 +87,11 @@ class _DaemonFSM(BaseFSM[DaemonState]):
             DaemonState.FAILED,
         }),
         DaemonState.PAUSED: frozenset({
+            DaemonState.WAITING_FOR_IDLE,
+            DaemonState.FAILED,
+        }),
+        # CRASHED can re-queue (→ WAITING_FOR_IDLE) or permanently fail (→ FAILED)
+        DaemonState.CRASHED: frozenset({
             DaemonState.WAITING_FOR_IDLE,
             DaemonState.FAILED,
         }),
@@ -300,6 +317,9 @@ class IdleTrainingDaemon:
         self._last_loss = 0.0
         self._last_checkpoint_time = 0.0
 
+        # Crash-respawn tracking
+        self.crash_count: int = 0
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -405,8 +425,38 @@ class IdleTrainingDaemon:
 
             # Run one complete optimizer step (grad_accum_steps microbatches)
             current_step = self._accumulator.current_step
-            step_result = self._step_runner(current_step, self._accumulator.accumulated)
+            try:
+                step_result = self._step_runner(current_step, self._accumulator.accumulated)
+            except Exception as exc:
+                # Subprocess/step runner crash — attempt respawn
+                exit_code = getattr(exc, "returncode", 1) or 1
+                can_respawn = self._respawn_on_crash(exit_code=exit_code)
+                if can_respawn:
+                    # Re-enter the wait cycle and restart the training loop
+                    self._fsm.transition(DaemonState.WAITING_FOR_IDLE)
+                    self._wait_for_idle()
+                    self._fsm.transition(DaemonState.GUARDING)
+                    _can_train, _blocking = self._resource_guard.all_guards_clear(
+                        self._config.required_vram_bytes
+                    )
+                    if _can_train:
+                        self._fsm.transition(DaemonState.TRAINING)
+                        # Reset the checkpoint time and continue the loop
+                        self._last_checkpoint_time = time.monotonic()
+                        continue
+                    else:
+                        self._fsm.transition(DaemonState.FAILED)
+                        raise RuntimeError(
+                            f"Resource guards blocked after crash-respawn: {_blocking}"
+                        ) from exc
+                else:
+                    # Max crashes exceeded — remain in FAILED state (set in _respawn_on_crash)
+                    raise
             self._last_loss = float(step_result.get("loss") or 0.0)
+
+            # Successful step — reset crash count
+            if self.crash_count > 0:
+                self.crash_count = 0
 
             for _ in range(self._config.grad_accum_steps):
                 should_step = self._accumulator.record_microbatch()
@@ -558,6 +608,61 @@ class IdleTrainingDaemon:
         except Exception as exc:
             self._logger.warn(f"Checkpoint save failed (non-fatal): {exc}", organ="idle")
 
+    def _respawn_on_crash(self, exit_code: int = 1) -> bool:
+        """Handle a training subprocess crash.
+
+        Increments crash_count, emits ``daemon.subprocess_crash`` evidence,
+        and decides whether to respawn (crash_count < MAX_CRASHES) or
+        permanently fail (crash_count >= MAX_CRASHES).
+
+        Parameters
+        ----------
+        exit_code:
+            The exit code of the crashed subprocess (non-zero).
+
+        Returns
+        -------
+        bool
+            ``True``  — caller should re-queue training (respawn).
+            ``False`` — caller should propagate the error (max crashes reached).
+        """
+        self.crash_count += 1
+
+        # Transition to CRASHED state (from TRAINING)
+        self._fsm.transition(DaemonState.CRASHED)
+
+        self._logger.emit(
+            {
+                "type": "daemon.subprocess_crash",
+                "data": {
+                    "exit_code": exit_code,
+                    "crash_count": self.crash_count,
+                    "max_crashes": MAX_CRASHES,
+                    "respawn_delay_seconds": _RESPAWN_DELAY_SECONDS,
+                },
+            },
+            organ="idle",
+        )
+
+        if self.crash_count >= MAX_CRASHES:
+            # Permanently fail — do not respawn
+            self._fsm.transition(DaemonState.FAILED)
+            self._logger.emit(
+                {
+                    "type": "daemon.max_crashes_exceeded",
+                    "data": {
+                        "crash_count": self.crash_count,
+                        "max_crashes": MAX_CRASHES,
+                    },
+                },
+                organ="idle",
+            )
+            return False
+
+        # Wait before respawning
+        time.sleep(_RESPAWN_DELAY_SECONDS)
+        return True
+
     def _wait_for_idle(self) -> None:
         """Poll until the system is idle."""
         while True:
@@ -578,7 +683,9 @@ __all__ = [
     "IdleTrainingDaemon",
     "IdleTrainingFSM",
     "IdleTrainingState",
+    "MAX_CRASHES",
     "StepRunner",
     "_default_step_runner",
+    "_RESPAWN_DELAY_SECONDS",
     "make_real_gpu_step_runner",
 ]

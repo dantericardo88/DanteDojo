@@ -314,8 +314,12 @@ class TestTrainingCompleteEvidence:
 # ---------------------------------------------------------------------------
 
 class TestTrainingCrashDetection:
-    def test_crashing_step_runner_does_not_silently_succeed(self, tmp_path):
+    def test_crashing_step_runner_does_not_silently_succeed(self, tmp_path, monkeypatch):
         """A step runner that raises must not produce a 'completed' result."""
+        import time as _time
+        monkeypatch.setattr(_time, "sleep", lambda _: None)
+        monkeypatch.setattr("dojo.idle.daemon._RESPAWN_DELAY_SECONDS", 0.0)
+
         cfg = _make_config(tmp_path)
 
         def _crashing_runner(step, accum):
@@ -330,7 +334,11 @@ class TestTrainingCrashDetection:
         with pytest.raises(RuntimeError, match="CUDA OOM"):
             daemon.run()
 
-    def test_daemon_propagates_step_runner_exception(self, tmp_path):
+    def test_daemon_propagates_step_runner_exception(self, tmp_path, monkeypatch):
+        import time as _time
+        monkeypatch.setattr(_time, "sleep", lambda _: None)
+        monkeypatch.setattr("dojo.idle.daemon._RESPAWN_DELAY_SECONDS", 0.0)
+
         cfg = _make_config(tmp_path)
         crash_count = {"n": 0}
 
@@ -346,7 +354,9 @@ class TestTrainingCrashDetection:
         )
         with pytest.raises(ValueError):
             daemon.run()
-        assert crash_count["n"] == 1
+        # With crash-respawn, the daemon retries up to MAX_CRASHES times before failing
+        from dojo.idle.daemon import MAX_CRASHES
+        assert crash_count["n"] == MAX_CRASHES
 
 
 # ---------------------------------------------------------------------------

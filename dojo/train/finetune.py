@@ -497,6 +497,32 @@ def finetune(
                     _sim_wandb_cb.on_epoch_end(_ep, {"loss": 1.0 - _ep * 0.1})
                 _sim_wandb_cb.on_train_end({"final_loss": max(0.01, 1.0 - config.num_epochs * 0.1)})
 
+        def _maybe_emit_nf4_config() -> None:
+            """Emit quant.nf4_config evidence for QLoRA/NF4 training modes in mock paths."""
+            if config.training_mode in {"sft", "bf16", "fp8"}:
+                return
+            try:
+                from dojo.quant.nf4 import get_bnb_nf4_config as _get_nf4
+                _get_nf4()
+            except Exception:
+                _nf4_cfg = {
+                    "load_in_4bit": True,
+                    "bnb_4bit_quant_type": "nf4",
+                    "bnb_4bit_use_double_quant": True,
+                    "bnb_4bit_compute_dtype": "bfloat16",
+                }
+                logger.emit(
+                    {
+                        "type": "quant.nf4_config",
+                        "data": {
+                            **_nf4_cfg,
+                            "finetune_mock": True,
+                            "training_mode": config.training_mode or "qlora",
+                        },
+                    },
+                    organ="quant",
+                )
+
         if not backend_available:
             warnings.warn(
                 f"Backend '{backend.value}' is not installed. "
@@ -504,6 +530,7 @@ def finetune(
                 stacklevel=2,
             )
             _maybe_run_wandb_sim_callback()
+            _maybe_emit_nf4_config()
             steps_completed, final_loss = _simulate_training_steps(config, logger, ckpt_mgr)
         elif config.training_mode == "fp8":
             steps_completed, final_loss = _run_real_fp8(config, logger, ckpt_mgr, pack)
@@ -511,6 +538,7 @@ def finetune(
             steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
         elif not real_gpu:
             _maybe_run_wandb_sim_callback()
+            _maybe_emit_nf4_config()
             steps_completed, final_loss = _simulate_training_steps(config, logger, ckpt_mgr)
         elif config.training_mode == "sft":
             steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
