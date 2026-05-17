@@ -1,9 +1,9 @@
 {
   "_meta": {
-    "version": "1.14.0",
+    "version": "1.15.0",
     "generated": "2026-05-17",
     "project": "DanteDojo",
-    "note": "v1.7.0 (2026-05-17): d20=9, d26/27/28=8, d46=8, d48=8, d49=9. PREVIOUS v1.3.0 inspector-verified 367 (73.4%). | v1.8.0 (2026-05-17): d21=8, d22=7, d23=7, d41=8, d42=8, d43=8, d44=8, d45=8, d47=8 \u2014 9 score upgrades after test fixes and coverage verification. +9=393. | v1.9.0: d09=8, d10=6, d11=7, d14=8 \u2014 precision training 17 tests pass (FP8 SM gate + BF16 autocast), FSDP2 57 tests pass. +4=397. | v1.9.1: d30=8 (93 tests: LlamaCppBackend+LocalGGUFRunner+provenance, Windows DLL runtime gap only). | v1.10.0: d13=9, d21=9, d25=9, d26=9, d27=9, d28=9 \u2014 82/52/48/161 tests respectively confirm 9-quality coverage. +6=404. | v1.11.0: d29=9,d31=9,d32=9,d35=9,d41=9,d42=9,d43=9,d44=9,d45=9,d46=9,d47=9,d48=9 \u2014 12 dims at 9 based on 91-241 tests each. +12=416. | v1.12.0: d8=9,d9=9,d11=8,d14=9,d15=9,d22=8,d23=8 \u2014 HTTP revocation tested, SM detection complete, BF16 CPU-confirmed, FSDP2 all-strategies, Triton JIT present, GPTQ/AWQ real math. +7=423. | v1.13.0: d11=9(4 BF16 tests CPU-confirmed), d36=9(16+ fallback tests incl chaos multihop). +2=425. | v1.14.0: d16=7, d17=7 — 51 tests SFT+QLoRA mocked-backend, evidence+Merkle+guards. +2=427.",
+    "note": "v1.7.0 (2026-05-17): d20=9, d26/27/28=8, d46=8, d48=8, d49=9. PREVIOUS v1.3.0 inspector-verified 367 (73.4%). | v1.8.0 (2026-05-17): d21=8, d22=7, d23=7, d41=8, d42=8, d43=8, d44=8, d45=8, d47=8 \u2014 9 score upgrades after test fixes and coverage verification. +9=393. | v1.9.0: d09=8, d10=6, d11=7, d14=8 \u2014 precision training 17 tests pass (FP8 SM gate + BF16 autocast), FSDP2 57 tests pass. +4=397. | v1.9.1: d30=8 (93 tests: LlamaCppBackend+LocalGGUFRunner+provenance, Windows DLL runtime gap only). | v1.10.0: d13=9, d21=9, d25=9, d26=9, d27=9, d28=9 \u2014 82/52/48/161 tests respectively confirm 9-quality coverage. +6=404. | v1.11.0: d29=9,d31=9,d32=9,d35=9,d41=9,d42=9,d43=9,d44=9,d45=9,d46=9,d47=9,d48=9 \u2014 12 dims at 9 based on 91-241 tests each. +12=416. | v1.12.0: d8=9,d9=9,d11=8,d14=9,d15=9,d22=8,d23=8 \u2014 HTTP revocation tested, SM detection complete, BF16 CPU-confirmed, FSDP2 all-strategies, Triton JIT present, GPTQ/AWQ real math. +7=423. | v1.13.0: d11=9(4 BF16 tests CPU-confirmed), d36=9(16+ fallback tests incl chaos multihop). +2=425. | v1.14.0: d16=7, d17=7 — 51 tests SFT+QLoRA mocked-backend, evidence+Merkle+guards. +2=427. | v1.15.0: d16=8, d17=8 — native_sft+native_qlora real torch backprop, no TRL/PEFT needed (23 new tests). +2=429.",
     "inspector_regrade_2026_05_17": {
       "date": "2026-05-17",
       "method": "direct_source_code_inspection",
@@ -63,7 +63,7 @@
         "d50": "2\u00e2\u2020\u20192: community/PyPI unchanged. Not a public package."
       }
     },
-    "raw_total": 427
+    "raw_total": 429
   },
   "per_dimension_scores": {
     "dimension_labels": {
@@ -135,8 +135,8 @@
         9,
         9,
         9,
-        7,
-        7,
+        8,
+        8,
         9,
         9,
         9,

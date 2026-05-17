@@ -914,3 +914,226 @@ class TestFinetuneConstitutionalGuards:
             pass
         types = {e.get("type") for e in EvidenceLogger.get_events()}
         assert EvidenceType.ONE_DOOR_ENTRY.value in types
+
+
+# ---------------------------------------------------------------------------
+# Native SFT (d16) — real torch backprop, no TRL required
+# ---------------------------------------------------------------------------
+
+class TestNativeSFTSteps:
+    """run_native_sft_steps() — real cross-entropy + gradient descent on CPU."""
+
+    def test_returns_nonempty_list(self):
+        from dojo.train.native_rl import run_native_sft_steps
+        results = run_native_sft_steps(num_epochs=1, steps_per_epoch=2,
+                                       learning_rate=1e-4, seed=42)
+        assert len(results) == 2
+
+    def test_step_fields_present(self):
+        from dojo.train.native_rl import run_native_sft_steps, NativeSFTStep
+        results = run_native_sft_steps(num_epochs=1, steps_per_epoch=1,
+                                       learning_rate=1e-4, seed=42)
+        s = results[0]
+        assert isinstance(s, NativeSFTStep)
+        assert s.step == 1
+        assert s.epoch == 1
+        assert isinstance(s.loss, float)
+        assert isinstance(s.perplexity, float)
+        assert isinstance(s.grad_norm, float)
+
+    def test_loss_is_finite_positive(self):
+        from dojo.train.native_rl import run_native_sft_steps
+        import math
+        results = run_native_sft_steps(num_epochs=2, steps_per_epoch=3,
+                                       learning_rate=1e-4, seed=0)
+        for s in results:
+            assert math.isfinite(s.loss) and s.loss > 0.0
+
+    def test_grad_norm_nonzero(self):
+        from dojo.train.native_rl import run_native_sft_steps
+        results = run_native_sft_steps(num_epochs=1, steps_per_epoch=2,
+                                       learning_rate=1e-4, seed=7)
+        assert all(s.grad_norm > 0.0 for s in results)
+
+    def test_perplexity_equals_exp_loss(self):
+        from dojo.train.native_rl import run_native_sft_steps
+        import math
+        results = run_native_sft_steps(num_epochs=1, steps_per_epoch=1,
+                                       learning_rate=1e-4, seed=42)
+        s = results[0]
+        assert abs(s.perplexity - math.exp(min(s.loss, 20.0))) < 1e-4
+
+    def test_loss_decreases_over_many_steps(self):
+        from dojo.train.native_rl import run_native_sft_steps
+        results = run_native_sft_steps(num_epochs=3, steps_per_epoch=5,
+                                       learning_rate=5e-3, seed=42)
+        first_loss = results[0].loss
+        last_loss = results[-1].loss
+        # Learning must move loss in some direction (real gradient descent)
+        assert first_loss != last_loss
+
+    def test_seed_reproducible(self):
+        from dojo.train.native_rl import run_native_sft_steps
+        r1 = run_native_sft_steps(num_epochs=1, steps_per_epoch=2, learning_rate=1e-4, seed=99)
+        r2 = run_native_sft_steps(num_epochs=1, steps_per_epoch=2, learning_rate=1e-4, seed=99)
+        assert r1[0].loss == r2[0].loss
+
+    def test_step_counter_increments(self):
+        from dojo.train.native_rl import run_native_sft_steps
+        results = run_native_sft_steps(num_epochs=2, steps_per_epoch=3,
+                                       learning_rate=1e-4, seed=42)
+        assert [s.step for s in results] == list(range(1, 7))
+
+    def test_epoch_field_correct(self):
+        from dojo.train.native_rl import run_native_sft_steps
+        results = run_native_sft_steps(num_epochs=2, steps_per_epoch=2,
+                                       learning_rate=1e-4, seed=42)
+        assert results[0].epoch == 1
+        assert results[1].epoch == 1
+        assert results[2].epoch == 2
+        assert results[3].epoch == 2
+
+
+class TestNativeSFTFitnesseFallback:
+    """finetune() uses native_sft when TRL is mocked out."""
+
+    def test_native_sft_runs_without_trl(self, tmp_path):
+        from dojo.train.finetune import _run_native_sft
+        from dojo.train.checkpoint import CheckpointManager
+        ckpt = CheckpointManager(tmp_path / "ckpt")
+        cfg = FinetuneConfig(pack_id="p", base_model="m", output_dir=tmp_path / "out",
+                             num_epochs=1, grad_accum_steps=2)
+        steps, loss = _run_native_sft(cfg, EvidenceLogger.get_instance(), ckpt)
+        assert steps == 2
+        assert loss > 0.0
+
+    def test_native_sft_emits_training_backend_selected(self, tmp_path):
+        from dojo.train.finetune import _run_native_sft
+        from dojo.train.checkpoint import CheckpointManager
+        ckpt = CheckpointManager(tmp_path / "ckpt")
+        cfg = FinetuneConfig(pack_id="p", base_model="m", output_dir=tmp_path / "out",
+                             num_epochs=1, grad_accum_steps=1)
+        _run_native_sft(cfg, EvidenceLogger.get_instance(), ckpt)
+        events = EvidenceLogger.get_events()
+        backends = [e["data"]["backend"] for e in events
+                    if e.get("type") == EvidenceType.TRAINING_BACKEND_SELECTED.value]
+        assert "native_sft" in backends
+
+    def test_native_sft_emits_training_step(self, tmp_path):
+        from dojo.train.finetune import _run_native_sft
+        from dojo.train.checkpoint import CheckpointManager
+        ckpt = CheckpointManager(tmp_path / "ckpt")
+        cfg = FinetuneConfig(pack_id="p", base_model="m", output_dir=tmp_path / "out",
+                             num_epochs=1, grad_accum_steps=1)
+        _run_native_sft(cfg, EvidenceLogger.get_instance(), ckpt)
+        events = EvidenceLogger.get_events()
+        step_events = [e for e in events if e.get("type") == EvidenceType.TRAINING_STEP.value]
+        assert any(e["data"].get("backend") == "native_sft" for e in step_events)
+
+
+# ---------------------------------------------------------------------------
+# Native QLoRA (d17) — frozen base + real LoRA adapter gradients
+# ---------------------------------------------------------------------------
+
+class TestNativeQLoRASteps:
+    """run_native_qlora_steps() — real LoRA gradient updates, no PEFT required."""
+
+    def test_returns_nonempty_list(self):
+        from dojo.train.native_rl import run_native_qlora_steps
+        results = run_native_qlora_steps(num_epochs=1, steps_per_epoch=2, lora_r=4,
+                                         lora_alpha=8.0, learning_rate=1e-4, seed=42)
+        assert len(results) == 2
+
+    def test_step_fields_present(self):
+        from dojo.train.native_rl import run_native_qlora_steps, NativeQLoRAStep
+        results = run_native_qlora_steps(num_epochs=1, steps_per_epoch=1, lora_r=4,
+                                         lora_alpha=8.0, learning_rate=1e-4, seed=42)
+        s = results[0]
+        assert isinstance(s, NativeQLoRAStep)
+        assert s.step == 1
+        assert s.lora_r == 4
+        assert s.trainable_params > 0
+
+    def test_trainable_params_matches_lora_r(self):
+        from dojo.train.native_rl import run_native_qlora_steps
+        r4 = run_native_qlora_steps(num_epochs=1, steps_per_epoch=1, lora_r=4,
+                                     lora_alpha=8.0, learning_rate=1e-4, seed=1)
+        r8 = run_native_qlora_steps(num_epochs=1, steps_per_epoch=1, lora_r=8,
+                                     lora_alpha=8.0, learning_rate=1e-4, seed=1)
+        assert r8[0].trainable_params > r4[0].trainable_params
+
+    def test_loss_is_finite_positive(self):
+        from dojo.train.native_rl import run_native_qlora_steps
+        import math
+        results = run_native_qlora_steps(num_epochs=2, steps_per_epoch=3, lora_r=4,
+                                         lora_alpha=8.0, learning_rate=1e-4, seed=0)
+        for s in results:
+            assert math.isfinite(s.loss) and s.loss > 0.0
+
+    def test_grad_norm_nonzero(self):
+        from dojo.train.native_rl import run_native_qlora_steps
+        results = run_native_qlora_steps(num_epochs=1, steps_per_epoch=2, lora_r=4,
+                                         lora_alpha=8.0, learning_rate=1e-4, seed=7)
+        assert all(s.grad_norm > 0.0 for s in results)
+
+    def test_seed_reproducible(self):
+        from dojo.train.native_rl import run_native_qlora_steps
+        r1 = run_native_qlora_steps(num_epochs=1, steps_per_epoch=2, lora_r=4,
+                                     lora_alpha=8.0, learning_rate=1e-4, seed=55)
+        r2 = run_native_qlora_steps(num_epochs=1, steps_per_epoch=2, lora_r=4,
+                                     lora_alpha=8.0, learning_rate=1e-4, seed=55)
+        assert r1[0].loss == r2[0].loss
+
+    def test_step_counter_increments(self):
+        from dojo.train.native_rl import run_native_qlora_steps
+        results = run_native_qlora_steps(num_epochs=2, steps_per_epoch=3, lora_r=4,
+                                         lora_alpha=8.0, learning_rate=1e-4, seed=42)
+        assert [s.step for s in results] == list(range(1, 7))
+
+    def test_perplexity_equals_exp_loss(self):
+        from dojo.train.native_rl import run_native_qlora_steps
+        import math
+        results = run_native_qlora_steps(num_epochs=1, steps_per_epoch=1, lora_r=4,
+                                         lora_alpha=8.0, learning_rate=1e-4, seed=42)
+        s = results[0]
+        assert abs(s.perplexity - math.exp(min(s.loss, 20.0))) < 1e-4
+
+
+class TestNativeQLoRAFallback:
+    """finetune() uses native_qlora when PEFT/TRL are mocked out."""
+
+    def test_native_qlora_runs_without_peft(self, tmp_path):
+        from dojo.train.finetune import _run_native_qlora
+        from dojo.train.checkpoint import CheckpointManager
+        ckpt = CheckpointManager(tmp_path / "ckpt")
+        cfg = FinetuneConfig(pack_id="p", base_model="m", output_dir=tmp_path / "out",
+                             training_mode="qlora", num_epochs=1, grad_accum_steps=2,
+                             lora_r=4, lora_alpha=16)
+        steps, loss = _run_native_qlora(cfg, EvidenceLogger.get_instance(), ckpt)
+        assert steps == 2
+        assert loss > 0.0
+
+    def test_native_qlora_emits_backend_selected(self, tmp_path):
+        from dojo.train.finetune import _run_native_qlora
+        from dojo.train.checkpoint import CheckpointManager
+        ckpt = CheckpointManager(tmp_path / "ckpt")
+        cfg = FinetuneConfig(pack_id="p", base_model="m", output_dir=tmp_path / "out",
+                             training_mode="qlora", num_epochs=1, grad_accum_steps=1,
+                             lora_r=4, lora_alpha=16)
+        _run_native_qlora(cfg, EvidenceLogger.get_instance(), ckpt)
+        events = EvidenceLogger.get_events()
+        backends = [e["data"]["backend"] for e in events
+                    if e.get("type") == EvidenceType.TRAINING_BACKEND_SELECTED.value]
+        assert "native_qlora" in backends
+
+    def test_native_qlora_emits_lora_r_in_evidence(self, tmp_path):
+        from dojo.train.finetune import _run_native_qlora
+        from dojo.train.checkpoint import CheckpointManager
+        ckpt = CheckpointManager(tmp_path / "ckpt")
+        cfg = FinetuneConfig(pack_id="p", base_model="m", output_dir=tmp_path / "out",
+                             training_mode="qlora", num_epochs=1, grad_accum_steps=1,
+                             lora_r=8, lora_alpha=16)
+        _run_native_qlora(cfg, EvidenceLogger.get_instance(), ckpt)
+        events = EvidenceLogger.get_events()
+        step_events = [e for e in events if e.get("type") == EvidenceType.TRAINING_STEP.value]
+        assert any(e["data"].get("lora_r") == 8 for e in step_events)

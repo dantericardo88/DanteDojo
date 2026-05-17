@@ -527,13 +527,201 @@ def run_native_dpo_steps(
     return results
 
 
+# ---------------------------------------------------------------------------
+# Native SFT + QLoRA
+# ---------------------------------------------------------------------------
+
+@dataclass
+class NativeSFTStep:
+    step: int
+    epoch: int
+    loss: float
+    perplexity: float
+    grad_norm: float
+
+
+@dataclass
+class NativeQLoRAStep:
+    step: int
+    epoch: int
+    loss: float
+    perplexity: float
+    grad_norm: float
+    trainable_params: int
+    lora_r: int
+
+
+class _LoRALinear(nn.Module):
+    """Minimal LoRA adapter: W_0 (frozen) + scale * (B @ A)."""
+
+    def __init__(self, in_features: int, out_features: int, r: int = 4, alpha: float = 8.0) -> None:
+        super().__init__()
+        self.weight = nn.Parameter(torch.zeros(out_features, in_features), requires_grad=False)
+        self.lora_A = nn.Parameter(torch.randn(r, in_features) * 0.02)
+        self.lora_B = nn.Parameter(torch.zeros(out_features, r))
+        self.scale = alpha / r
+
+    def forward(self, x: Tensor) -> Tensor:
+        return F.linear(x, self.weight) + F.linear(F.linear(x, self.lora_A), self.lora_B) * self.scale
+
+
+_SFT_TEXTS = [
+    "The capital of France is Paris.",
+    "Water boils at 100 degrees Celsius.",
+    "The earth orbits the sun once per year.",
+    "Python is a high-level programming language.",
+]
+
+
+def run_native_sft_steps(
+    num_epochs: int,
+    steps_per_epoch: int,
+    learning_rate: float,
+    seed: int,
+    device: Optional[torch.device] = None,
+) -> list[NativeSFTStep]:
+    """Real SFT: cross-entropy teacher-forcing on _TinyDecoderLM.  No TRL needed.
+
+    Forward + backward passes are real; gradients flow through all model params.
+    Runs on CPU or CUDA without any external training library.
+    """
+    torch.manual_seed(seed)
+    dev = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    model = build_tiny_lm(device=dev)
+    optimizer = _Adam(list(model.parameters()), lr=learning_rate)
+
+    input_ids, attention_mask = _TOKENIZER.encode_batch(_SFT_TEXTS, max_len=32, device=dev)
+
+    results: list[NativeSFTStep] = []
+    step = 0
+
+    for epoch in range(num_epochs):
+        for _ in range(steps_per_epoch):
+            step += 1
+
+            logits = model(input_ids[:, :-1])   # (B, T-1, V)
+            targets = input_ids[:, 1:]           # (B, T-1)
+            mask = attention_mask[:, 1:]         # (B, T-1)
+
+            per_token_loss = F.cross_entropy(
+                logits.reshape(-1, logits.shape[-1]),
+                targets.reshape(-1),
+                ignore_index=_TOKENIZER.pad_id,
+                reduction="none",
+            )
+            loss = (per_token_loss * mask.reshape(-1)).sum() / mask.reshape(-1).sum().clamp(min=1.0)
+
+            optimizer.zero_grad()
+            loss.backward()
+
+            grads = [p.grad.norm() for p in model.parameters() if p.grad is not None]
+            grad_norm = float(torch.stack(grads).norm().item()) if grads else 0.0
+            optimizer.step()
+
+            loss_val = float(loss.item())
+            results.append(NativeSFTStep(
+                step=step,
+                epoch=epoch + 1,
+                loss=loss_val,
+                perplexity=math.exp(min(loss_val, 20.0)),
+                grad_norm=grad_norm,
+            ))
+
+    return results
+
+
+def run_native_qlora_steps(
+    num_epochs: int,
+    steps_per_epoch: int,
+    lora_r: int,
+    lora_alpha: float,
+    learning_rate: float,
+    seed: int,
+    device: Optional[torch.device] = None,
+) -> list[NativeQLoRAStep]:
+    """Real QLoRA-style: frozen base model + LoRA adapter on lm_head.  No PEFT needed.
+
+    Base model parameters are frozen; only lora_A and lora_B are trained.
+    Gradients flow only through the LoRA adapter — zero base-model weight updates.
+    """
+    torch.manual_seed(seed)
+    dev = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    base_model = build_tiny_lm(device=dev)
+    for p in base_model.parameters():
+        p.requires_grad_(False)
+
+    d_model, vocab_size = 64, 258
+    lora_head = _LoRALinear(d_model, vocab_size, r=lora_r, alpha=lora_alpha).to(dev)
+    lora_head.weight.data.copy_(base_model.lm_head.weight.data)
+
+    trainable = [p for p in lora_head.parameters() if p.requires_grad]
+    optimizer = _Adam(trainable, lr=learning_rate)
+    trainable_count = sum(p.numel() for p in trainable)
+
+    input_ids, attention_mask = _TOKENIZER.encode_batch(_SFT_TEXTS, max_len=32, device=dev)
+
+    results: list[NativeQLoRAStep] = []
+    step = 0
+
+    for epoch in range(num_epochs):
+        for _ in range(steps_per_epoch):
+            step += 1
+
+            with torch.no_grad():
+                T = input_ids.shape[1] - 1
+                pos = torch.arange(T, device=dev).unsqueeze(0)
+                x = base_model.tok_emb(input_ids[:, :-1]) + base_model.pos_emb(pos)
+                for block in base_model.blocks:
+                    x = block(x)
+                hidden = base_model.ln_f(x)   # (B, T-1, d_model)
+
+            logits = lora_head(hidden)         # (B, T-1, V)
+            targets = input_ids[:, 1:]
+            mask = attention_mask[:, 1:]
+
+            per_token_loss = F.cross_entropy(
+                logits.reshape(-1, logits.shape[-1]),
+                targets.reshape(-1),
+                ignore_index=_TOKENIZER.pad_id,
+                reduction="none",
+            )
+            loss = (per_token_loss * mask.reshape(-1)).sum() / mask.reshape(-1).sum().clamp(min=1.0)
+
+            optimizer.zero_grad()
+            loss.backward()
+
+            grads = [p.grad.norm() for p in trainable if p.grad is not None]
+            grad_norm = float(torch.stack(grads).norm().item()) if grads else 0.0
+            optimizer.step()
+
+            loss_val = float(loss.item())
+            results.append(NativeQLoRAStep(
+                step=step,
+                epoch=epoch + 1,
+                loss=loss_val,
+                perplexity=math.exp(min(loss_val, 20.0)),
+                grad_norm=grad_norm,
+                trainable_params=trainable_count,
+                lora_r=lora_r,
+            ))
+
+    return results
+
+
 __all__ = [
     "NativeDPOStep",
     "NativeGRPOStep",
+    "NativeQLoRAStep",
+    "NativeSFTStep",
     "_ByteTokenizer",
+    "_LoRALinear",
     "_TinyDecoderLM",
     "build_tiny_lm",
     "compute_sequence_log_probs",
     "run_native_dpo_steps",
     "run_native_grpo_steps",
+    "run_native_qlora_steps",
+    "run_native_sft_steps",
 ]

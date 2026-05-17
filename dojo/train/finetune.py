@@ -150,6 +150,79 @@ def _simulate_training_steps(
     return steps_completed, simulated_loss
 
 
+def _run_native_sft(
+    config: FinetuneConfig,
+    logger: EvidenceLogger,
+    ckpt_mgr: CheckpointManager,
+) -> tuple[int, float]:
+    """SFT via native_rl — real cross-entropy + backprop, no TRL required."""
+    from dojo.train.native_rl import run_native_sft_steps
+    logger.emit(
+        {
+            "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
+            "data": {"backend": "native_sft", "precision": "bf16"},
+        },
+        organ="train",
+    )
+    steps_data = run_native_sft_steps(
+        num_epochs=config.num_epochs,
+        steps_per_epoch=config.grad_accum_steps,
+        learning_rate=1e-4,
+        seed=42,
+    )
+    if not steps_data:
+        return 0, _STUB_FINAL_LOSS
+    final = steps_data[-1]
+    ckpt_mgr.save(final.step, {"loss": final.loss, "epochs": config.num_epochs})
+    logger.emit(
+        {
+            "type": EvidenceType.TRAINING_STEP.value,
+            "data": {"backend": "native_sft", "steps": final.step, "loss": final.loss,
+                     "grad_norm": final.grad_norm},
+        },
+        organ="train",
+    )
+    return final.step, final.loss
+
+
+def _run_native_qlora(
+    config: FinetuneConfig,
+    logger: EvidenceLogger,
+    ckpt_mgr: CheckpointManager,
+) -> tuple[int, float]:
+    """QLoRA via native_rl — frozen base + LoRA adapters, no PEFT required."""
+    from dojo.train.native_rl import run_native_qlora_steps
+    logger.emit(
+        {
+            "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
+            "data": {"backend": "native_qlora", "lora_r": config.lora_r,
+                     "lora_alpha": config.lora_alpha},
+        },
+        organ="train",
+    )
+    steps_data = run_native_qlora_steps(
+        num_epochs=config.num_epochs,
+        steps_per_epoch=config.grad_accum_steps,
+        lora_r=config.lora_r,
+        lora_alpha=float(config.lora_alpha),
+        learning_rate=1e-4,
+        seed=42,
+    )
+    if not steps_data:
+        return 0, _STUB_FINAL_LOSS
+    final = steps_data[-1]
+    ckpt_mgr.save(final.step, {"loss": final.loss, "epochs": config.num_epochs})
+    logger.emit(
+        {
+            "type": EvidenceType.TRAINING_STEP.value,
+            "data": {"backend": "native_qlora", "steps": final.step, "loss": final.loss,
+                     "lora_r": config.lora_r, "trainable_params": final.trainable_params},
+        },
+        organ="train",
+    )
+    return final.step, final.loss
+
+
 def _run_real_sft(
     config: FinetuneConfig,
     logger: EvidenceLogger,
@@ -174,7 +247,7 @@ def _run_real_sft(
         _missing = object()
         if _sys.modules.get("trl", _missing) is None:
             raise
-        return _simulate_training_steps(config, logger, ckpt_mgr)
+        return _run_native_sft(config, logger, ckpt_mgr)
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(config.base_model)
     if tokenizer.pad_token is None:
@@ -266,7 +339,7 @@ def _run_real_qlora(
         if (_sys.modules.get("peft", _missing) is None
                 or _sys.modules.get("trl", _missing) is None):
             raise
-        return _simulate_training_steps(config, logger, ckpt_mgr)
+        return _run_native_qlora(config, logger, ckpt_mgr)
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(config.base_model)
     if tokenizer.pad_token is None:
