@@ -81,6 +81,9 @@ class LlamaCppBackend:
         else:
             self._pid = _stub_pid()
 
+        # Read passport_id from sidecar .meta.json if it exists alongside the GGUF
+        passport_id = self._read_sidecar_passport_id()
+
         logger = EvidenceLogger.get_instance()
         logger.emit(
             {
@@ -91,6 +94,7 @@ class LlamaCppBackend:
                     "context_length": 2048,
                     "n_gpu_layers": self._n_gpu_layers,
                     "pid": self._pid,
+                    "passport_id": passport_id,
                 },
             },
             organ="serve",
@@ -157,6 +161,23 @@ class LlamaCppBackend:
             "--host", "127.0.0.1",
         ]
         return cmd
+
+    def _read_sidecar_passport_id(self) -> Optional[str]:
+        """Read passport_id from the .meta.json sidecar alongside the GGUF file.
+
+        Returns the passport_id string if the sidecar exists and contains it,
+        otherwise returns None (no crash — sidecar is optional).
+        """
+        import json as _json
+
+        meta_path = self._model_path.with_suffix(".meta.json")
+        if not meta_path.exists():
+            return None
+        try:
+            meta = _json.loads(meta_path.read_text(encoding="utf-8"))
+            return meta.get("dojo.passport_id") or None
+        except Exception:
+            return None
 
 
 # ---------------------------------------------------------------------------

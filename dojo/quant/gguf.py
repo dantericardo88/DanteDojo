@@ -27,6 +27,19 @@ from dojo.core.types import HALProfile
 # GGUF magic bytes: "GGUF" in little-endian ASCII
 _GGUF_MAGIC = b"\x47\x47\x55\x46"
 
+# Supported llama.cpp quantization types
+VALID_QUANT_TYPES = [
+    "Q4_0", "Q4_1",
+    "Q5_0", "Q5_1",
+    "Q8_0",
+    "Q2_K", "Q3_K_S", "Q3_K_M", "Q3_K_L",
+    "Q4_K_S", "Q4_K_M",
+    "Q5_K_S", "Q5_K_M",
+    "Q6_K",
+    "F16", "F32",
+    "IQ2_XXS", "IQ2_XS", "IQ3_XXS", "IQ1_S",
+]
+
 _INSTALL_INSTRUCTIONS = (
     "llama-cpp-python is not installed or llama.cpp convert_hf_to_gguf.py was not found.\n"
     "To install llama-cpp-python:\n"
@@ -67,6 +80,15 @@ def export_gguf(
         QuantizationError: if conversion fails or llama.cpp is unavailable
             and stub mode is disabled.
     """
+    # Validate quant_type early — fail-closed before any I/O
+    if quant_type not in VALID_QUANT_TYPES:
+        valid_list = ", ".join(VALID_QUANT_TYPES)
+        raise QuantizationError(
+            f"Unsupported quantization type {quant_type!r}. "
+            f"Valid types: {valid_list}",
+            reason=f"quant_type={quant_type!r} not in VALID_QUANT_TYPES",
+        )
+
     logger = EvidenceLogger.get_instance()
 
     model_name = model_path.name or "model"
@@ -120,7 +142,7 @@ def export_gguf(
 
     # Embed constitutional passport metadata (sidecar)
     if passport_id:
-        _embed_passport_metadata(output_path, passport_id=passport_id)
+        _embed_passport_metadata(output_path, passport_id=passport_id, profile=profile)
 
     # Compute file hash and emit completion evidence
     file_hash = _sha256_file(output_path)
@@ -329,23 +351,37 @@ def _write_stub(output_path: Path) -> Path:
     return output_path
 
 
-def _embed_passport_metadata(gguf_path: Path, passport_id: str) -> None:
+def _embed_passport_metadata(
+    gguf_path: Path,
+    passport_id: str,
+    profile: Optional[HALProfile] = None,
+) -> None:
     """Embed passport_id as a string KV pair in the GGUF file metadata.
 
     Uses a sidecar .meta.json file — always reliable regardless of whether
     the llama_cpp Python package exposes a write API.
+
+    Also embeds merkle_root and issued_at from the HALProfile passport if
+    available, creating a provenance chain: training → promotion → inference.
     """
+    meta: dict = {
+        "dojo.passport_id": passport_id,
+        "dojo.gguf_sha256": _sha256_file(gguf_path),
+    }
+
+    # Extend with passport provenance fields if available on the profile
+    if profile is not None:
+        passport = getattr(profile, "passport", None)
+        if passport is not None:
+            merkle_root = getattr(passport, "merkle_root", None)
+            issued_at = getattr(passport, "issued_at", None)
+            if merkle_root is not None:
+                meta["dojo.merkle_root"] = str(merkle_root)
+            if issued_at is not None:
+                meta["dojo.issued_at"] = str(issued_at)
+
     meta_path = gguf_path.with_suffix(".meta.json")
-    meta_path.write_text(
-        json.dumps(
-            {
-                "dojo.passport_id": passport_id,
-                "dojo.gguf_sha256": _sha256_file(gguf_path),
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
+    meta_path.write_text(json.dumps(meta, indent=2), encoding="utf-8")
 
 
 def _sha256_file(path: Path) -> str:
