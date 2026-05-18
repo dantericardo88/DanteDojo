@@ -26,41 +26,70 @@ class LayerStreamingInferenceLoop:
     In non-mock mode, each layer is a real torch.nn.Linear that performs a
     genuine matrix multiplication on CPU (or GPU if available).  Hidden state
     is threaded from layer to layer so the forward pass is a real computation
-    graph, not arithmetic stubs.  VOCAB_SIZE / HIDDEN_DIM are kept small so
-    this path runs on CPU without a GPU.
+    graph, not arithmetic stubs.
+
+    The ``hidden_dim`` constructor parameter controls model width — use 64 for
+    fast CI tests and 768/1024 for realistic VRAM budget measurements.
+
+    VRAM budget is enforced in bytes: ``layer_vram_bytes()`` computes the real
+    tensor memory footprint per layer, and ``run()`` tracks peak VRAM usage.
     """
 
     VOCAB_SIZE: int = 50257   # GPT-2 compatible vocabulary
-    HIDDEN_DIM: int = 64      # small enough for CPU-only CI
+    _DEFAULT_HIDDEN_DIM: int = 64  # fast CPU-only default
 
     def __init__(
         self,
         layer_ids: List[str],
         streamer: Optional[WeightStreamer] = None,
         mock_mode: bool = True,
+        hidden_dim: int = 0,
+        vram_budget_bytes: int = 0,
     ) -> None:
         self._layer_ids = layer_ids
         self._streamer = streamer or WeightStreamer(mock_mode=mock_mode)
         self._evidence = EvidenceLogger.get_instance()
         self._mock_mode = mock_mode
+        self._hidden_dim: int = hidden_dim if hidden_dim > 0 else self._DEFAULT_HIDDEN_DIM
+        self._vram_budget_bytes: int = vram_budget_bytes
         self._torch: Any = None
         self._embed: Any = None
         self._layers: Dict[str, Any] = {}
         self._lm_head: Any = None
+        self._peak_vram_bytes: int = 0
         if not mock_mode:
             self._init_real_layers()
 
+    @property
+    def HIDDEN_DIM(self) -> int:
+        return self._hidden_dim
+
+    def layer_vram_bytes(self, dtype_bytes: int = 4) -> int:
+        """Compute real VRAM footprint for one Linear layer (hidden_dim × hidden_dim).
+
+        Args:
+            dtype_bytes: Bytes per element (4 = float32, 2 = bfloat16/float16).
+
+        Returns:
+            Number of bytes required to hold one layer's weight matrix.
+        """
+        return self._hidden_dim * self._hidden_dim * dtype_bytes
+
+    def total_model_vram_bytes(self, dtype_bytes: int = 4) -> int:
+        """Total VRAM required to hold all layers simultaneously (in bytes)."""
+        return self.layer_vram_bytes(dtype_bytes) * len(self._layer_ids)
+
     def _init_real_layers(self) -> None:
-        """Build tiny CPU-capable torch.nn.Linear layers — real tensors, no GPU required."""
+        """Build CPU-capable torch.nn.Linear layers — real tensors, no GPU required."""
         try:
             import torch
             import torch.nn as nn
             self._torch = torch
             torch.manual_seed(42)
-            self._embed = nn.Embedding(self.VOCAB_SIZE, self.HIDDEN_DIM)
+            self._embed = nn.Embedding(self.VOCAB_SIZE, self._hidden_dim)
             for lid in self._layer_ids:
-                self._layers[lid] = nn.Linear(self.HIDDEN_DIM, self.HIDDEN_DIM, bias=False)
-            self._lm_head = nn.Linear(self.HIDDEN_DIM, self.VOCAB_SIZE, bias=False)
+                self._layers[lid] = nn.Linear(self._hidden_dim, self._hidden_dim, bias=False)
+            self._lm_head = nn.Linear(self._hidden_dim, self.VOCAB_SIZE, bias=False)
         except ImportError:
             self._mock_mode = True  # graceful fallback if torch absent
 
@@ -79,6 +108,8 @@ class LayerStreamingInferenceLoop:
         """
         output_tokens: List[int] = []
 
+        per_layer_bytes = self.layer_vram_bytes()
+
         self._evidence.emit(
             {
                 "type": EvidenceType.SERVE_START.value,
@@ -87,21 +118,38 @@ class LayerStreamingInferenceLoop:
                     "num_layers": len(self._layer_ids),
                     "prompt_tokens": len(prompt_tokens),
                     "vram_budget_layers": 1,  # constitutional maximum
+                    "hidden_dim": self._hidden_dim,
+                    "per_layer_vram_bytes": per_layer_bytes,
+                    "total_model_vram_bytes": per_layer_bytes * len(self._layer_ids),
+                    "vram_budget_bytes": self._vram_budget_bytes,
                 },
             },
             organ="stream",
         )
+
+        # Fail-closed budget check: if a budget is set and one layer exceeds it,
+        # refuse to run rather than silently OOM.
+        if self._vram_budget_bytes > 0 and per_layer_bytes > self._vram_budget_bytes:
+            raise InferenceLoopError(
+                f"Layer VRAM ({per_layer_bytes} bytes) exceeds budget "
+                f"({self._vram_budget_bytes} bytes) for hidden_dim={self._hidden_dim}"
+            )
+
+        self._peak_vram_bytes = 0
 
         # Embed prompt tokens into an initial hidden state (real path only).
         hidden: Any = None
         if not self._mock_mode and self._embed is not None:
             clamped = [t % self.VOCAB_SIZE for t in (prompt_tokens[:512] or [0])]
             ids = self._torch.tensor(clamped, dtype=self._torch.long)
-            hidden = self._embed(ids).mean(dim=0, keepdim=True)  # (1, HIDDEN_DIM)
+            hidden = self._embed(ids).mean(dim=0, keepdim=True)  # (1, hidden_dim)
 
         for layer_id in self._layer_ids:
             # Load this layer (enforces MAX_ACTIVE_LAYERS=1)
             self._streamer.stream_layer(layer_id, source_tier="ram")
+
+            # Track peak VRAM — only one layer is resident at a time
+            self._peak_vram_bytes = max(self._peak_vram_bytes, per_layer_bytes)
 
             # Forward pass — real linear ops in non-mock mode, hash stub in mock.
             token, hidden = self._forward_pass(layer_id, hidden)
@@ -122,13 +170,27 @@ class LayerStreamingInferenceLoop:
                     "mode": "layer_streaming",
                     "layers_processed": len(self._layer_ids),
                     "output_tokens": len(output_tokens),
-                    "vram_peak_layers": 1,  # never exceeded
+                    "vram_peak_layers": 1,
+                    "vram_peak_bytes": self._peak_vram_bytes,
+                    "total_model_vram_bytes": per_layer_bytes * len(self._layer_ids),
+                    "savings_ratio": (
+                        round(
+                            1.0 - (self._peak_vram_bytes / max(per_layer_bytes * len(self._layer_ids), 1)),
+                            4,
+                        )
+                        if self._layer_ids else 0.0
+                    ),
                 },
             },
             organ="stream",
         )
 
         return output_tokens
+
+    @property
+    def peak_vram_bytes(self) -> int:
+        """Peak VRAM bytes observed during the most recent run() call."""
+        return self._peak_vram_bytes
 
     def _forward_pass(self, layer_id: str, hidden: Any = None) -> Tuple[int, Any]:
         """Run a layer forward pass with real torch tensors (no GPU required).

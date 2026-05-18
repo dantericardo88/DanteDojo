@@ -427,6 +427,22 @@ def _run_real_qlora(
     return result.global_step, result.training_loss
 
 
+def _detect_sm_version() -> float:
+    """Return the GPU SM (compute capability) as a float, e.g. 8.9 for Ada.
+
+    Queries torch.cuda.get_device_capability() when CUDA is available.
+    Falls back to the DOJO_MOCK_SM environment variable for CI/testing.
+    """
+    try:
+        import torch
+        if torch.cuda.is_available():
+            major, minor = torch.cuda.get_device_capability()
+            return float(f"{major}.{minor}")
+    except Exception:
+        pass
+    return float(os.environ.get("DOJO_MOCK_SM", "0.0"))
+
+
 def _run_real_fp8(
     config: FinetuneConfig,
     logger: EvidenceLogger,
@@ -434,7 +450,7 @@ def _run_real_fp8(
     pack: SpecializationPack,
 ) -> tuple[int, float]:
     """FP8 training — requires Ada Lovelace SM >= 8.9 or Hopper SM >= 9.0."""
-    sm = float(os.environ.get("DOJO_MOCK_SM", "0.0"))
+    sm = _detect_sm_version()
     if sm < _FP8_MIN_SM:
         raise PrecisionUnsupported(
             f"FP8 requires SM >= {_FP8_MIN_SM}, detected SM {sm}. "

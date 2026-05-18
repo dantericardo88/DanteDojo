@@ -218,12 +218,13 @@ class LocalGGUFRunner:
         n_gpu_layers: int = -1,    # -1 = all layers on GPU
         context_size: int = 2048,
         passport_id: str = "",
+        llm: Any = None,
     ) -> None:
         self._model_path = model_path
         self._n_gpu_layers = n_gpu_layers
         self._context_size = context_size
         self._passport_id = passport_id
-        self._llm: Any = None
+        self._llm: Any = llm
         self._evidence = EvidenceLogger.get_instance()
 
     @one_door("serve.local_gguf.load", organ="serve")
@@ -290,7 +291,7 @@ class LocalGGUFRunner:
         if self._llm is None and _real_gpu_mode():
             raise ServeError("Model not loaded. Call load() first.", reason="not_loaded")
 
-        if _real_gpu_mode():
+        if self._llm is not None:
             output = self._llm(
                 prompt,
                 max_tokens=max_tokens,
