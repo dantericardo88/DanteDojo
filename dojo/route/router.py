@@ -7,9 +7,11 @@ privacy tiers, and records cost receipts.
 from __future__ import annotations
 
 import os
+import threading
+import time
 from collections import deque
 from datetime import datetime, timezone
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import (
@@ -39,6 +41,13 @@ _CIRCUIT_BREAKER_THRESHOLD = 3
 # A provider in _HALF_OPEN_PROVIDERS is allowed ONE test call. If it succeeds,
 # the provider is restored; if it fails, it goes back to dead.
 _HALF_OPEN_PROVIDERS: set[str] = set()
+
+# Timestamps recording when each provider was added to _DEAD_PROVIDERS.
+# Used by _is_provider_alive() to auto-promote to half-open after the TTL.
+_DEAD_PROVIDER_TIMESTAMPS: dict[str, float] = {}
+_RECOVERY_TTL_SECONDS: float = 300.0   # 5 minutes default
+_RECOVERY_BACKOFF_MULTIPLIER: float = 1.5
+_RECOVERY_ATTEMPTS: dict[str, int] = {}
 
 # Latency-based circuit breaker: tracks recent call latencies per provider.
 # If the last _LATENCY_BREAKER_WINDOW consecutive calls each exceed
@@ -92,12 +101,15 @@ def _record_provider_failure(option: RoutingOption) -> None:
     """Increment failure count for *option*; mark dead after threshold.
 
     Emits ``route.circuit_trip`` evidence when the breaker trips.
+    Stamps _DEAD_PROVIDER_TIMESTAMPS so the TTL-based auto-half-open path
+    in _is_provider_alive() knows when to re-probe.
     """
     key = option.value
     _circuit_breaker[key] = _circuit_breaker.get(key, 0) + 1
     if _circuit_breaker[key] >= _CIRCUIT_BREAKER_THRESHOLD:
         _DEAD_PROVIDERS.add(key)
         _HALF_OPEN_PROVIDERS.discard(key)
+        _DEAD_PROVIDER_TIMESTAMPS[key] = time.monotonic()
         _circuit_breaker[key] = 0
         EvidenceLogger.get_instance().emit(
             {
@@ -106,6 +118,7 @@ def _record_provider_failure(option: RoutingOption) -> None:
                     "provider": key,
                     "threshold": _CIRCUIT_BREAKER_THRESHOLD,
                     "reason": "consecutive_failures",
+                    "recovery_ttl_seconds": _RECOVERY_TTL_SECONDS,
                 },
             },
             organ="route",
@@ -122,6 +135,8 @@ def _record_provider_success(option: RoutingOption) -> None:
     _circuit_breaker[key] = 0
     _DEAD_PROVIDERS.discard(key)
     _HALF_OPEN_PROVIDERS.discard(key)
+    _DEAD_PROVIDER_TIMESTAMPS.pop(key, None)
+    _RECOVERY_ATTEMPTS.pop(key, None)
     # Also clear any latency window so slow-call history doesn't linger
     if key in _latency_window:
         _latency_window[key].clear()
@@ -185,11 +200,37 @@ def _is_half_open(option: RoutingOption) -> bool:
 def _is_provider_alive(option: RoutingOption) -> bool:
     """Return False if the provider is known dead; True otherwise.
 
+    Auto-promotes a dead provider to half-open once the recovery TTL has
+    elapsed since it was marked dead. The TTL grows exponentially by
+    _RECOVERY_BACKOFF_MULTIPLIER on each successive failure to prevent
+    thrashing.
+
     In real-GPU mode (DOJO_REAL_GPU=1) or when DOJO_HEALTH_CHECK=1 a HEAD
     request is made to the endpoint. In plain stub/test mode only
     _DEAD_PROVIDERS is consulted (no network calls).
     """
-    if option.value in _DEAD_PROVIDERS:
+    key = option.value
+    if key in _DEAD_PROVIDERS:
+        dead_at = _DEAD_PROVIDER_TIMESTAMPS.get(key)
+        if dead_at is not None:
+            attempt = _RECOVERY_ATTEMPTS.get(key, 0)
+            ttl = _RECOVERY_TTL_SECONDS * (_RECOVERY_BACKOFF_MULTIPLIER ** attempt)
+            if (time.monotonic() - dead_at) >= ttl:
+                _DEAD_PROVIDERS.discard(key)
+                _HALF_OPEN_PROVIDERS.add(key)
+                _RECOVERY_ATTEMPTS[key] = attempt + 1
+                EvidenceLogger.get_instance().emit(
+                    {
+                        "type": "route.circuit_half_open",
+                        "data": {
+                            "provider": key,
+                            "ttl_elapsed_s": time.monotonic() - dead_at,
+                            "attempt": attempt + 1,
+                        },
+                    },
+                    organ="route",
+                )
+                return True
         return False
 
     real_gpu = os.environ.get("DOJO_REAL_GPU") == "1"
@@ -466,10 +507,112 @@ def _build_receipt(task: str, option: RoutingOption, input_text: str) -> CostRec
     )
 
 
+# ---------------------------------------------------------------------------
+# Background health monitor (d36)
+# ---------------------------------------------------------------------------
+
+class HealthMonitor:
+    """Background thread that probes dead providers and auto-recovers them.
+
+    Periodically iterates over _DEAD_PROVIDERS, performs a real HEAD probe
+    via _health_check_with_timeout(), and removes recovered providers from
+    the dead set. Independent of the TTL-based path in _is_provider_alive():
+    HealthMonitor is for production deployments that want continuous probing,
+    while the TTL path runs on-demand when dispatch() is called.
+
+    Designed for safe daemon-thread usage in tests — start() and stop() are
+    idempotent and stop() joins within the configured timeout.
+    """
+
+    def __init__(
+        self,
+        interval_seconds: float = 30.0,
+        probe_timeout_seconds: float = 3.0,
+        endpoint_resolver: Optional[Callable[[str], str]] = None,
+    ) -> None:
+        self._interval = interval_seconds
+        self._probe_timeout = probe_timeout_seconds
+        self._endpoint_resolver = endpoint_resolver
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._iterations: int = 0
+        self._recoveries: int = 0
+
+    def _resolve_endpoint(self, provider_key: str) -> str:
+        if self._endpoint_resolver is not None:
+            return self._endpoint_resolver(provider_key)
+        # Default: try to map back to a RoutingOption
+        for opt in RoutingOption:
+            if opt.value == provider_key:
+                return _api_endpoint(opt) or ""
+        return ""
+
+    def probe_once(self) -> int:
+        """Probe all currently dead providers exactly once.
+
+        Returns the number of providers that recovered during this probe.
+        """
+        recovered = 0
+        for key in list(_DEAD_PROVIDERS):
+            endpoint = self._resolve_endpoint(key)
+            if not endpoint:
+                continue
+            if _health_check_with_timeout(endpoint, timeout=self._probe_timeout):
+                _DEAD_PROVIDERS.discard(key)
+                _DEAD_PROVIDER_TIMESTAMPS.pop(key, None)
+                _RECOVERY_ATTEMPTS.pop(key, None)
+                _circuit_breaker[key] = 0
+                recovered += 1
+                EvidenceLogger.get_instance().emit(
+                    {
+                        "type": "route.health_monitor_recovery",
+                        "data": {"provider": key, "probe_timeout_s": self._probe_timeout},
+                    },
+                    organ="route",
+                )
+        self._iterations += 1
+        self._recoveries += recovered
+        return recovered
+
+    def _run_loop(self) -> None:
+        while not self._stop_event.is_set():
+            try:
+                self.probe_once()
+            except Exception:
+                pass  # never crash the monitor thread
+            self._stop_event.wait(timeout=self._interval)
+
+    def start(self) -> None:
+        """Start the background probing thread (idempotent)."""
+        if self._thread is not None and self._thread.is_alive():
+            return
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run_loop, daemon=True, name="dojo-health-monitor")
+        self._thread.start()
+
+    def stop(self, timeout_seconds: float = 5.0) -> None:
+        """Signal the thread to stop and join (idempotent)."""
+        self._stop_event.set()
+        if self._thread is not None:
+            self._thread.join(timeout=timeout_seconds)
+            self._thread = None
+
+    @property
+    def iterations(self) -> int:
+        return self._iterations
+
+    @property
+    def total_recoveries(self) -> int:
+        return self._recoveries
+
+
 __all__ = [
     "dispatch",
+    "HealthMonitor",
     "_DEAD_PROVIDERS",
     "_HALF_OPEN_PROVIDERS",
+    "_DEAD_PROVIDER_TIMESTAMPS",
+    "_RECOVERY_TTL_SECONDS",
     "_circuit_breaker",
     "_latency_window",
     "_CIRCUIT_BREAKER_THRESHOLD",
