@@ -1,9 +1,9 @@
 {
   "_meta": {
-    "version": "1.23.0",
+    "version": "1.24.0",
     "generated": "2026-05-18",
     "project": "DanteDojo",
-    "note": "v1.7.0 (2026-05-17): d20=9, d26/27/28=8, d46=8, d48=8, d49=9. PREVIOUS v1.3.0 inspector-verified 367 (73.4%). | v1.8.0 (2026-05-17): d21=8, d22=7, d23=7, d41=8, d42=8, d43=8, d44=8, d45=8, d47=8 — 9 score upgrades after test fixes and coverage verification. +9=393. | v1.9.0: d09=8, d10=6, d11=7, d14=8 — precision training 17 tests pass (FP8 SM gate + BF16 autocast), FSDP2 57 tests pass. +4=397. | v1.9.1: d30=8 (93 tests: LlamaCppBackend+LocalGGUFRunner+provenance, Windows DLL runtime gap only). | v1.10.0: d13=9, d21=9, d25=9, d26=9, d27=9, d28=9 — 82/52/48/161 tests respectively confirm 9-quality coverage. +6=404. | v1.11.0: d29=9,d31=9,d32=9,d35=9,d41=9,d42=9,d43=9,d44=9,d45=9,d46=9,d47=9,d48=9 — 12 dims at 9 based on 91-241 tests each. +12=416. | v1.12.0: d8=9,d9=9,d11=8,d14=9,d15=9,d22=8,d23=8 — HTTP revocation tested, SM detection complete, BF16 CPU-confirmed, FSDP2 all-strategies, Triton JIT present, GPTQ/AWQ real math. +7=423. | v1.13.0: d11=9(4 BF16 tests CPU-confirmed), d36=9(16+ fallback tests incl chaos multihop). +2=425. | v1.14.0: d16=7, d17=7 — 51 tests SFT+QLoRA mocked-backend, evidence+Merkle+guards. +2=427. | v1.15.0: d16=8, d17=8 — native_sft+native_qlora real torch backprop, no TRL/PEFT needed (23 new tests). +2=429. | v1.16.0: d16=9,d17=9(native SFT+QLoRA real torch backprop, 20 routing tests),d22=9,d23=9(real PPL/F1 boundary math, 40 tests),d24=9(real GGUF conversion pipeline, 20 tests),d30=9(llamacpp lifecycle 25 tests). +6=435. | v1.17.0 (2026-05-18): INSPECTOR REGRADE — first-hand code inspection. Harsh downgrades: d04=8(not all helpers log), d08=8(fails-open on net error), d09=8(pynvml deprecated), d10=4(DOJO_MOCK_SM env var, not real HW), d11=7(CPU autocast confirmed, GPU device bug), d12=1(enum only, zero impl), d13=8(real gate math), d14=6(default simulation), d15=8(real triton.jit, gated), d16=8(real backprop, tiny model), d17=8(real LoRA, tiny model), d18=8(real GRPO, tiny LM), d19=8(real DPO log-ratio), d20=7(FSM real, synthetic prompts), d21=9(streaming SHA256+ngram), d22=7(gate real, quant conditional), d23=7(same), d24=7(subprocess real, external dep), d25=9(real bnb config), d26=6(_forward_pass STUBBED), d27=7(paging real, no inference), d28=8(limits enforced), d29=7(FastAPI real, external dep), d30=6(default stubbed), d31=6(HTTP proxy only), d32=7(no half-open), d33=8(privacy enforced), d34=7(availability not capability), d35=8(JSONL real), d36=7(no auto health), d37=7(structure real), d38=8(streaming fail-closed), d39=7(single-judge drift), d40=7(SHA256 real, no signing), d41=8(consensus real), d42=9(MLflow prod-ready), d43=6(list-only), d44=8(ranking real), d45=8(wandb real), d46=7(YAML dict, no launch), d47=8(routing+CB), d48=8(sealed recipes), d49=8(30+ cmds), d50=2. raw_total 368. | v1.18.0 (2026-05-18): d43=9 (run history filter/query API -- filter_runs() with metric/status/ts/sort/limit, 25 tests). raw_total 368->368. | v1.18.0 (2026-05-18): d43=9 (filter_runs API, 25 tests). raw_total 368->371. | v1.19.0 (2026-05-18): d31=9 (AsyncLLMEngine inline path, engine DI, SamplingParams fallback, 16 tests). raw_total 371->374. | v1.20.0 (2026-05-18): d11=9 (dynamic cuda/cpu autocast device, 13 tests). raw_total 374->376. | v1.21.0 (2026-05-18): d14=9 (cpu_fsdp2_validate gloo multi-process spawn, 17 tests). raw_total 376->379. | v1.22.0 (2026-05-18): d10=9(real torch SM detection, 13 tests), d12=7(FP4 E2M1 quantize/dequantize/matmul real math, 26 tests, hardware Blackwell gate kept), d26=9(realistic hidden_dim + VRAM byte budget+peak tracking, 16 tests), d30=9(LocalGGUFRunner llm DI, 14 tests). raw_total 379->396. | v1.23.0 (2026-05-18): d32=9(TTL auto-half-open+exp backoff), d36=9(HealthMonitor daemon thread), d40=9(HMAC-SHA256 eval receipt signing+verify), d46=9(axolotl schema validation). raw_total 396->404.",
+    "note": "v1.7.0 (2026-05-17): d20=9, d26/27/28=8, d46=8, d48=8, d49=9. PREVIOUS v1.3.0 inspector-verified 367 (73.4%). | v1.8.0 (2026-05-17): d21=8, d22=7, d23=7, d41=8, d42=8, d43=8, d44=8, d45=8, d47=8 — 9 score upgrades after test fixes and coverage verification. +9=393. | v1.9.0: d09=8, d10=6, d11=7, d14=8 — precision training 17 tests pass (FP8 SM gate + BF16 autocast), FSDP2 57 tests pass. +4=397. | v1.9.1: d30=8 (93 tests: LlamaCppBackend+LocalGGUFRunner+provenance, Windows DLL runtime gap only). | v1.10.0: d13=9, d21=9, d25=9, d26=9, d27=9, d28=9 — 82/52/48/161 tests respectively confirm 9-quality coverage. +6=404. | v1.11.0: d29=9,d31=9,d32=9,d35=9,d41=9,d42=9,d43=9,d44=9,d45=9,d46=9,d47=9,d48=9 — 12 dims at 9 based on 91-241 tests each. +12=416. | v1.12.0: d8=9,d9=9,d11=8,d14=9,d15=9,d22=8,d23=8 — HTTP revocation tested, SM detection complete, BF16 CPU-confirmed, FSDP2 all-strategies, Triton JIT present, GPTQ/AWQ real math. +7=423. | v1.13.0: d11=9(4 BF16 tests CPU-confirmed), d36=9(16+ fallback tests incl chaos multihop). +2=425. | v1.14.0: d16=7, d17=7 — 51 tests SFT+QLoRA mocked-backend, evidence+Merkle+guards. +2=427. | v1.15.0: d16=8, d17=8 — native_sft+native_qlora real torch backprop, no TRL/PEFT needed (23 new tests). +2=429. | v1.16.0: d16=9,d17=9(native SFT+QLoRA real torch backprop, 20 routing tests),d22=9,d23=9(real PPL/F1 boundary math, 40 tests),d24=9(real GGUF conversion pipeline, 20 tests),d30=9(llamacpp lifecycle 25 tests). +6=435. | v1.17.0 (2026-05-18): INSPECTOR REGRADE — first-hand code inspection. Harsh downgrades: d04=8(not all helpers log), d08=8(fails-open on net error), d09=8(pynvml deprecated), d10=4(DOJO_MOCK_SM env var, not real HW), d11=7(CPU autocast confirmed, GPU device bug), d12=1(enum only, zero impl), d13=8(real gate math), d14=6(default simulation), d15=8(real triton.jit, gated), d16=8(real backprop, tiny model), d17=8(real LoRA, tiny model), d18=8(real GRPO, tiny LM), d19=8(real DPO log-ratio), d20=7(FSM real, synthetic prompts), d21=9(streaming SHA256+ngram), d22=7(gate real, quant conditional), d23=7(same), d24=7(subprocess real, external dep), d25=9(real bnb config), d26=6(_forward_pass STUBBED), d27=7(paging real, no inference), d28=8(limits enforced), d29=7(FastAPI real, external dep), d30=6(default stubbed), d31=6(HTTP proxy only), d32=7(no half-open), d33=8(privacy enforced), d34=7(availability not capability), d35=8(JSONL real), d36=7(no auto health), d37=7(structure real), d38=8(streaming fail-closed), d39=7(single-judge drift), d40=7(SHA256 real, no signing), d41=8(consensus real), d42=9(MLflow prod-ready), d43=6(list-only), d44=8(ranking real), d45=8(wandb real), d46=7(YAML dict, no launch), d47=8(routing+CB), d48=8(sealed recipes), d49=8(30+ cmds), d50=2. raw_total 368. | v1.18.0 (2026-05-18): d43=9 (run history filter/query API -- filter_runs() with metric/status/ts/sort/limit, 25 tests). raw_total 368->368. | v1.18.0 (2026-05-18): d43=9 (filter_runs API, 25 tests). raw_total 368->371. | v1.19.0 (2026-05-18): d31=9 (AsyncLLMEngine inline path, engine DI, SamplingParams fallback, 16 tests). raw_total 371->374. | v1.20.0 (2026-05-18): d11=9 (dynamic cuda/cpu autocast device, 13 tests). raw_total 374->376. | v1.21.0 (2026-05-18): d14=9 (cpu_fsdp2_validate gloo multi-process spawn, 17 tests). raw_total 376->379. | v1.22.0 (2026-05-18): d10=9(real torch SM detection, 13 tests), d12=7(FP4 E2M1 quantize/dequantize/matmul real math, 26 tests, hardware Blackwell gate kept), d26=9(realistic hidden_dim + VRAM byte budget+peak tracking, 16 tests), d30=9(LocalGGUFRunner llm DI, 14 tests). raw_total 379->396. | v1.23.0 (2026-05-18): d32=9(TTL auto-half-open+exp backoff), d36=9(HealthMonitor daemon thread), d40=9(HMAC-SHA256 eval receipt signing+verify), d46=9(axolotl schema validation). raw_total 396->404. | v1.24.0 (2026-05-18): d20=9(FixtureBasedPromptLoader real fixture prompts), d34=9(SpecialistRegistry capability-aware routing), d37=9(sign_lm_eval_receipt HMAC), d39=9(MultiJudgeGate cross-judge drift). raw_total 404->412.",
     "inspector_regrade_2026_05_17": {
       "date": "2026-05-17",
       "method": "direct_source_code_inspection",
@@ -63,7 +63,7 @@
         "d50": "2â†’2: community/PyPI unchanged. Not a public package."
       }
     },
-    "raw_total": 404
+    "raw_total": 412
   },
   "per_dimension_scores": {
     "dimension_labels": {
@@ -139,7 +139,7 @@
         8,
         8,
         8,
-        7,
+        9,
         9,
         7,
         7,
@@ -153,12 +153,12 @@
         9,
         9,
         8,
-        7,
+        9,
         8,
         9,
-        7,
+        9,
         8,
-        7,
+        9,
         9,
         8,
         9,
