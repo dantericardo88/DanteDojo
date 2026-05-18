@@ -32,6 +32,7 @@ class VLLMBackend:
         port: int,
         context_length: int,
         tensor_parallel_size: int = 1,
+        engine: Optional[object] = None,
     ) -> None:
         self._model_path = model_path
         self._profile = profile
@@ -40,7 +41,7 @@ class VLLMBackend:
         self._tensor_parallel_size = tensor_parallel_size
         self._pid: int = 0
         self._process: Optional[object] = None  # subprocess.Popen when real
-        self._engine: Optional[object] = None   # vllm.AsyncLLMEngine when real
+        self._engine: Optional[object] = engine  # vllm.AsyncLLMEngine when real
 
     # ------------------------------------------------------------------
     # Public API
@@ -362,7 +363,7 @@ class VLLMBackend:
             organ="serve",
         )
 
-        if _real_gpu_mode() and self._engine is not None:
+        if self._engine is not None:
             outputs = self._run_engine_batch(
                 prompts,
                 max_tokens=max_tokens,
@@ -424,6 +425,51 @@ class VLLMBackend:
         except (OSError, ProcessLookupError):
             pass
 
+    def init_engine(self) -> None:
+        """Create an in-process AsyncLLMEngine and store it in self._engine.
+
+        This is the preferred path when vllm is installed: it avoids the
+        subprocess HTTP round-trip by running the engine in the same process.
+        Call once after construction (or pass ``engine=`` to the constructor
+        for tests).
+
+        Raises:
+            BackendUnavailable: if vllm is not installed.
+        """
+        _require_vllm()
+        try:
+            from vllm import AsyncLLMEngine, AsyncEngineArgs  # type: ignore[import]
+            tp = (
+                self._tensor_parallel_size
+                if self._tensor_parallel_size > 1
+                else _tp_size_for_profile(self._profile)
+            )
+            engine_args = AsyncEngineArgs(
+                model=str(self._model_path),
+                max_model_len=self._context_length,
+                tensor_parallel_size=tp,
+                disable_log_stats=True,
+                trust_remote_code=True,
+            )
+            self._engine = AsyncLLMEngine.from_engine_args(engine_args)
+        except Exception as exc:
+            raise BackendUnavailable(
+                f"Failed to initialise AsyncLLMEngine: {exc}",
+                reason=str(exc),
+            ) from exc
+
+        EvidenceLogger.get_instance().emit(
+            {
+                "type": EvidenceType.SERVE_READY.value,
+                "data": {
+                    "backend": "vllm_inline",
+                    "model_path": str(self._model_path),
+                    "context_length": self._context_length,
+                },
+            },
+            organ="serve",
+        )
+
     @property
     def endpoint_url(self) -> str:
         return f"http://localhost:{self._port}"
@@ -458,7 +504,13 @@ class VLLMBackend:
         engine = self._engine
 
         async def _run() -> list:
-            from vllm import SamplingParams  # type: ignore[import]
+            try:
+                from vllm import SamplingParams  # type: ignore[import]
+            except ImportError:
+                class SamplingParams:  # type: ignore[no-redef]
+                    def __init__(self, **kw: object) -> None:
+                        for k, v in kw.items():
+                            setattr(self, k, v)
             outputs = []
             for i, prompt in enumerate(prompts):
                 per_max = (

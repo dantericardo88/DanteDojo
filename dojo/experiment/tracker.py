@@ -6,6 +6,7 @@ All metric logging emits constitutional evidence regardless of MLflow status.
 
 from __future__ import annotations
 
+import time
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -47,6 +48,8 @@ class _InMemoryRun:
         self.metrics: List[Dict[str, Any]] = []
         self.artifacts: List[str] = []
         self.status: str = "RUNNING"
+        self.start_time: float = time.time()
+        self.end_time: Optional[float] = None
 
     def log_param(self, key: str, value: Any) -> None:
         self.params[key] = value
@@ -56,6 +59,24 @@ class _InMemoryRun:
 
     def end(self, status: str = "FINISHED") -> None:
         self.status = status
+        self.end_time = time.time()
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Serialize to a flat dict suitable for list_runs / filter_runs."""
+        entry: Dict[str, Any] = {
+            "run_id": self.run_id,
+            "name": self.config.run_name,
+            "experiment_name": self.config.experiment_name,
+            "status": self.status,
+            "start_time": str(self.start_time),
+            "end_time": str(self.end_time) if self.end_time else None,
+        }
+        # Flatten latest value per metric key so leaderboard can rank by them
+        latest: Dict[str, float] = {}
+        for m in self.metrics:
+            latest[m["key"]] = m["value"]
+        entry.update(latest)
+        return entry
 
 
 # ---------------------------------------------------------------------------
@@ -81,6 +102,7 @@ class ExperimentTracker:
         self._active_run_id: Optional[str] = None
         self._in_memory_run: Optional[_InMemoryRun] = None
         self._mlflow_run: Optional[Any] = None  # mlflow.ActiveRun or None
+        self._history: List[_InMemoryRun] = []   # completed runs for filter_runs()
 
         if use_mlflow:
             try:
@@ -314,6 +336,7 @@ class ExperimentTracker:
 
         if self._in_memory_run is not None:
             self._in_memory_run.end(status)
+            self._history.append(self._in_memory_run)
 
         EvidenceLogger.get_instance().emit(
             {
@@ -330,11 +353,10 @@ class ExperimentTracker:
         self._in_memory_run = None
 
     def list_runs(self, experiment_name: str = "") -> List[Dict[str, Any]]:
-        """List completed runs. Returns MLflow runs when available, empty list otherwise.
+        """List completed runs. Returns MLflow runs when available, in-memory history otherwise.
 
         Each returned dict contains at minimum: run_id, name, status, start_time.
-        When MLflow is available, metric values are also included as top-level keys
-        so that RunLeaderboard.from_tracker() can extract them.
+        Metric values are included as top-level keys so RunLeaderboard can rank by them.
         """
         if self._mlflow_available:
             try:
@@ -349,14 +371,92 @@ class ExperimentTracker:
                         "status": r.info.status,
                         "start_time": str(r.info.start_time),
                     }
-                    # Include all logged metrics so leaderboard can rank by them
                     for metric_key, metric_val in r.data.metrics.items():
                         entry[metric_key] = metric_val
                     result.append(entry)
                 return result
             except Exception:
-                return []
-        return []
+                pass
+        # In-memory fallback: return completed runs from this tracker instance
+        runs_to_filter = [r for r in self._history if not experiment_name or r.config.experiment_name == experiment_name]
+        return [r.to_dict() for r in runs_to_filter]
+
+    def filter_runs(
+        self,
+        experiment_name: str = "",
+        metric_name: Optional[str] = None,
+        min_val: Optional[float] = None,
+        max_val: Optional[float] = None,
+        status: Optional[str] = None,
+        after_ts: Optional[float] = None,
+        sort_by: Optional[str] = None,
+        higher_is_better: bool = True,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """Filter and sort completed runs.
+
+        Args:
+            experiment_name: Filter to runs belonging to this experiment (empty = all).
+            metric_name: Filter to runs that have logged this metric.
+            min_val: Exclude runs where metric_name < min_val.
+            max_val: Exclude runs where metric_name > max_val.
+            status: Filter by run status string (e.g. "FINISHED", "FAILED").
+            after_ts: Filter to runs that started after this Unix timestamp.
+            sort_by: Metric key to sort by (descending when higher_is_better=True).
+            higher_is_better: If True, sort descending; if False, sort ascending.
+            limit: Maximum number of runs to return.
+
+        Returns:
+            List of run dicts, filtered and sorted, capped at limit.
+        """
+        candidates = self.list_runs(experiment_name=experiment_name)
+
+        results: List[Dict[str, Any]] = []
+        for run in candidates:
+            if status and run.get("status") != status:
+                continue
+            if after_ts is not None:
+                try:
+                    if float(run.get("start_time", 0)) < after_ts:
+                        continue
+                except (TypeError, ValueError):
+                    pass
+            if metric_name is not None:
+                val = run.get(metric_name)
+                if val is None:
+                    continue
+                if min_val is not None and float(val) < min_val:
+                    continue
+                if max_val is not None and float(val) > max_val:
+                    continue
+            results.append(run)
+
+        if sort_by:
+            results.sort(
+                key=lambda r: float(r.get(sort_by, float("-inf") if higher_is_better else float("inf"))),
+                reverse=higher_is_better,
+            )
+
+        filtered = results[:limit]
+
+        EvidenceLogger.get_instance().emit(
+            {
+                "type": EvidenceType.EXPERIMENT_METRIC.value,
+                "data": {
+                    "type": "filter_runs",
+                    "experiment_name": experiment_name,
+                    "metric_name": metric_name,
+                    "min_val": min_val,
+                    "max_val": max_val,
+                    "status": status,
+                    "sort_by": sort_by,
+                    "returned": len(filtered),
+                },
+            },
+            organ="experiment",
+        )
+
+        return filtered
 
     @contextmanager
     def run(self, config: RunConfig) -> Iterator[str]:

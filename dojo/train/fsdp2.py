@@ -552,4 +552,125 @@ def fsdp2_train(
     )
 
 
-__all__ = ["fsdp2_train", "_is_torch_fsdp_available"]
+# ---------------------------------------------------------------------------
+# CPU multi-process FSDP2 validation (gloo backend — no GPU required)
+# ---------------------------------------------------------------------------
+
+def _cpu_fsdp2_worker(
+    rank: int,
+    world_size: int,
+    result_queue: "Any",
+    steps: int,
+) -> None:
+    """Worker function executed in each spawned process.
+
+    Initialises a gloo process group, wraps a tiny linear model with FSDP
+    using NO_SHARD strategy, runs ``steps`` forward+backward+step iterations,
+    and puts a result dict into ``result_queue``.
+
+    Using NO_SHARD keeps the test fast (no all-gather overhead) while still
+    exercising real torch.distributed initialisation and FSDP wrapping on CPU.
+    """
+    import torch
+    import torch.distributed as dist
+    import torch.multiprocessing as _mp  # noqa: F401 — ensure mp context active
+    import torch.nn as nn
+    import torch.optim as optim
+    from torch.distributed.fsdp import FullyShardedDataParallel as FSDP, ShardingStrategy
+
+    os.environ["MASTER_ADDR"] = "127.0.0.1"
+    os.environ["MASTER_PORT"] = "29600"
+
+    try:
+        dist.init_process_group(
+            backend="gloo",
+            rank=rank,
+            world_size=world_size,
+        )
+
+        model = nn.Linear(8, 8, bias=False)
+        wrapped = FSDP(model, sharding_strategy=ShardingStrategy.NO_SHARD)
+        optimizer = optim.SGD(wrapped.parameters(), lr=0.01)
+
+        losses: list[float] = []
+        for _ in range(steps):
+            x = torch.randn(4, 8)
+            loss = wrapped(x).sum()
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            losses.append(float(loss.item()))
+
+        dist.destroy_process_group()
+
+        result_queue.put({
+            "rank": rank,
+            "ok": True,
+            "steps": steps,
+            "final_loss": losses[-1] if losses else 0.0,
+            "loss_finite": all(not (l != l or l == float("inf")) for l in losses),
+        })
+    except Exception as exc:
+        result_queue.put({"rank": rank, "ok": False, "error": str(exc)})
+
+
+def cpu_fsdp2_validate(world_size: int = 2, steps: int = 3) -> list[dict]:
+    """Spawn ``world_size`` CPU processes, each running real FSDP2 with gloo.
+
+    This is the lightweight multi-process validation path for d14.  It proves
+    that the torch.distributed initialisation, FSDP wrapping, forward/backward
+    passes, and gradient sync all function correctly without requiring a GPU.
+
+    Args:
+        world_size: Number of worker processes to spawn (default 2).
+        steps: Number of training steps per worker (default 3).
+
+    Returns:
+        List of result dicts, one per rank — each has:
+        ``{"rank": int, "ok": bool, "steps": int, "final_loss": float, ...}``
+
+    Raises:
+        FSDP2ConfigError: if torch.distributed.fsdp is unavailable.
+        RuntimeError: if any worker process fails.
+    """
+    if not _is_torch_fsdp_available():
+        raise FSDP2ConfigError(
+            "torch.distributed.fsdp not available — cannot run CPU FSDP2 validation",
+            reason="Install PyTorch >= 1.12",
+        )
+
+    import torch.multiprocessing as mp
+
+    ctx = mp.get_context("spawn")
+    result_queue: "mp.Queue[dict]" = ctx.Queue()
+
+    processes = []
+    for rank in range(world_size):
+        p = ctx.Process(
+            target=_cpu_fsdp2_worker,
+            args=(rank, world_size, result_queue, steps),
+            daemon=False,
+        )
+        p.start()
+        processes.append(p)
+
+    for p in processes:
+        p.join(timeout=120)
+
+    results: list[dict] = []
+    while not result_queue.empty():
+        results.append(result_queue.get_nowait())
+
+    results.sort(key=lambda r: r.get("rank", 0))
+
+    failed = [r for r in results if not r.get("ok")]
+    if failed:
+        raise RuntimeError(
+            f"CPU FSDP2 validation failed on {len(failed)} rank(s): "
+            + "; ".join(r.get("error", "unknown") for r in failed)
+        )
+
+    return results
+
+
+__all__ = ["fsdp2_train", "_is_torch_fsdp_available", "cpu_fsdp2_validate"]

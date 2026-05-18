@@ -172,16 +172,22 @@ def _run_native_sft(
     )
     if not steps_data:
         return 0, _STUB_FINAL_LOSS
+    # Emit one TRAINING_STEP per epoch (last step of each epoch)
+    epoch_last: dict[int, Any] = {}
+    for s in steps_data:
+        epoch_last[s.epoch] = s
+    for epoch_num in sorted(epoch_last):
+        s = epoch_last[epoch_num]
+        logger.emit(
+            {
+                "type": EvidenceType.TRAINING_STEP.value,
+                "data": {"backend": "native_sft", "epoch": epoch_num,
+                         "step": s.step, "loss": s.loss, "grad_norm": s.grad_norm},
+            },
+            organ="train",
+        )
     final = steps_data[-1]
     ckpt_mgr.save(final.step, {"loss": final.loss, "epochs": config.num_epochs})
-    logger.emit(
-        {
-            "type": EvidenceType.TRAINING_STEP.value,
-            "data": {"backend": "native_sft", "steps": final.step, "loss": final.loss,
-                     "grad_norm": final.grad_norm},
-        },
-        organ="train",
-    )
     return final.step, final.loss
 
 
@@ -210,16 +216,23 @@ def _run_native_qlora(
     )
     if not steps_data:
         return 0, _STUB_FINAL_LOSS
+    # Emit one TRAINING_STEP per epoch (last step of each epoch)
+    epoch_last: dict[int, Any] = {}
+    for s in steps_data:
+        epoch_last[s.epoch] = s
+    for epoch_num in sorted(epoch_last):
+        s = epoch_last[epoch_num]
+        logger.emit(
+            {
+                "type": EvidenceType.TRAINING_STEP.value,
+                "data": {"backend": "native_qlora", "epoch": epoch_num,
+                         "step": s.step, "loss": s.loss,
+                         "lora_r": config.lora_r, "trainable_params": s.trainable_params},
+            },
+            organ="train",
+        )
     final = steps_data[-1]
     ckpt_mgr.save(final.step, {"loss": final.loss, "epochs": config.num_epochs})
-    logger.emit(
-        {
-            "type": EvidenceType.TRAINING_STEP.value,
-            "data": {"backend": "native_qlora", "steps": final.step, "loss": final.loss,
-                     "lora_r": config.lora_r, "trainable_params": final.trainable_params},
-        },
-        organ="train",
-    )
     return final.step, final.loss
 
 
@@ -273,10 +286,11 @@ def _run_real_sft(
         tokenizer=tokenizer,
     )
 
-    # torch.autocast with bfloat16 — BF16 mixed-precision training context
+    # torch.autocast with bfloat16 — use CUDA when available, otherwise CPU
     try:
         import torch
-        _ctx: Any = torch.autocast("cpu", dtype=torch.bfloat16)
+        _device = "cuda" if torch.cuda.is_available() else "cpu"
+        _ctx: Any = torch.autocast(_device, dtype=torch.bfloat16)
     except Exception:
         from contextlib import nullcontext
         _ctx = nullcontext()
@@ -609,6 +623,13 @@ def finetune(
             steps_completed, final_loss = _run_real_fp8(config, logger, ckpt_mgr, pack)
         elif config.training_mode == "bf16":
             steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
+        elif not real_gpu and backend == TrainingBackend.NATIVE:
+            # NATIVE backend (CPU / AMD MI300 / Intel B580) always does real training.
+            # _TinyDecoderLM runs on any device — no GPU gate needed.
+            if config.training_mode == "sft":
+                steps_completed, final_loss = _run_native_sft(config, logger, ckpt_mgr)
+            else:
+                steps_completed, final_loss = _run_native_qlora(config, logger, ckpt_mgr)
         elif not real_gpu:
             _maybe_run_wandb_sim_callback()
             _maybe_emit_nf4_config()
