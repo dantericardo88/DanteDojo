@@ -14,7 +14,7 @@ from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import ServerStartError
 from dojo.core.fsm import BaseFSM
 from dojo.core.one_door import one_door
-from dojo.core.types import Backend, DeploymentManifest, HALProfile, HardwareTier
+from dojo.core.types import Backend, ConstitutionalPassport, DeploymentManifest, HALProfile, HardwareTier
 from dojo.serve.manifest import build_manifest
 
 
@@ -77,6 +77,7 @@ def launch_server(
     context_length: int = 4096,
     port: int = 8080,
     passport_id: str = "",
+    passport: Optional[ConstitutionalPassport] = None,
     openai_port: Optional[int] = None,
 ) -> DeploymentManifest:
     """Select and launch an inference server.
@@ -90,9 +91,9 @@ def launch_server(
       TIER_AMD_MI300   → VLLM
       TIER_CPU         → LLAMACPP
 
-    In v1, no subprocess is spawned (GPU not present in CI) unless
-    DOJO_REAL_GPU=1. The FSM runs all transitions, evidence is emitted,
-    and a manifest is returned.
+    Revocation check: when `passport` is provided and has a revocation_url,
+    check_revocation() is called before the backend starts.  A revoked passport
+    blocks inference — PassportRevoked is raised and the FSM transitions to FAILED.
 
     Args:
         model_artifact_id: Dojo artifact URI.
@@ -101,7 +102,10 @@ def launch_server(
         backend: Override backend selection (None = auto).
         context_length: Context window size in tokens.
         port: Port for the HTTP server.
-        passport_id: Constitutional passport ID (empty = no passport).
+        passport_id: Constitutional passport ID string (used in manifests).
+        passport: Full ConstitutionalPassport object; when provided with a
+            revocation_url, check_revocation() is called at serve time.
+        openai_port: If set, also start an OpenAI-compatible proxy on this port.
 
     Returns:
         DeploymentManifest describing the running (or stub) server.
@@ -114,6 +118,21 @@ def launch_server(
 
     # Phase 1: IDLE → CONFIGURING
     fsm.transition(LaunchState.CONFIGURING)
+
+    # Revocation gate: block serve if passport has been revoked.
+    # This is the serve-time sovereign check — promotion already checked once,
+    # but we re-check at inference start so a revoked passport can't be loaded.
+    if passport is not None and passport.revocation_url:
+        from dojo.promote.revocation import check_revocation  # noqa: PLC0415
+        try:
+            check_revocation(passport)
+        except Exception as exc:
+            fsm.transition(LaunchState.FAILED)
+            raise ServerStartError(
+                f"Serve blocked: passport '{passport.passport_id}' failed revocation check — {exc}",
+                reason=str(exc),
+            ) from exc
+
     selected_backend = backend or _select_backend(profile)
     tp_size = 2 if (selected_backend == Backend.VLLM and profile.tier == HardwareTier.TIER_3090_DUAL) else 1
 

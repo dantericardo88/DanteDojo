@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import QuantizationError, QuantQualityRejected
@@ -67,6 +68,7 @@ def export_awq(
     bits: int = 4,
     group_size: int = 128,
     f1_drop_limit: float = 0.05,
+    pack: Optional[object] = None,
 ) -> Path:
     """Export model using autoawq.
 
@@ -78,6 +80,8 @@ def export_awq(
         f1_drop_limit: Maximum absolute F1 drop allowed (as a fraction, e.g.
             0.05 = 5 percentage-point drop). Raises QuantQualityRejected if
             exceeded. Default 0.05 (5 pp).
+        pack: Optional SpecializationPack — if provided, license is checked
+            before quantization (d48: license enforcement at every downstream gate).
 
     Returns:
         Path to the quantized model directory.
@@ -85,11 +89,14 @@ def export_awq(
     Raises:
         QuantizationError: if autoawq is not installed.
         QuantQualityRejected: if F1 drop exceeds f1_drop_limit.
+        PackLicenseRejected: if pack.license.allows_derived_ft is False.
     """
-    logger = EvidenceLogger.get_instance()
+    # d48: license gate before any GPU work
+    if pack is not None:
+        from dojo.pack.license import check_license_allows_training
+        check_license_allows_training(pack)
 
-    # Gate: always verify autoawq is importable (even in stub mode, we require the library)
-    _require_autoawq()
+    logger = EvidenceLogger.get_instance()
 
     output_path = output_dir / f"{model_path.name}-awq-{bits}bit"
 
@@ -116,7 +123,8 @@ def export_awq(
         # a config file.
         _run_emulated_awq_quantization(output_path, bits, group_size)
     else:
-        # Real mode: invoke autoawq quantization
+        # Real mode: require autoawq
+        _require_autoawq()
         _run_real_awq_quantization(model_path, output_path, bits, group_size)
 
     # Measure F1 before/after quantization

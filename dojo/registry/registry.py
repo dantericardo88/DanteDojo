@@ -165,6 +165,134 @@ def delete_artifact(
     return True
 
 
+@one_door("registry.lookup_version")
+def lookup_version(
+    model_name: str,
+    version: Optional[str] = None,
+    store: Optional[LocalRegistryStore] = None,
+) -> ModelArtifact:
+    """Look up a model artifact by logical name and optional version tag.
+
+    Resolves ``dojo://model-name:version`` style URIs.  The *model_name* is
+    matched against the prefix of each ``artifact_id`` (everything before the
+    last ``/``-separated segment).  If *version* is ``None`` or ``"latest"``,
+    the artifact with the lexicographically greatest version segment is
+    returned (e.g. ``v3`` > ``v2`` > ``v1``).
+
+    Args:
+        model_name: Logical model name (e.g. ``"my-model"``).  May include a
+            ``dojo://`` prefix and an optional ``:version`` suffix — both are
+            stripped before matching.
+        version: Specific version string to retrieve (e.g. ``"v2"``).
+            ``None`` or ``"latest"`` returns the most recent version.
+        store: Optional custom store backend.
+
+    Returns:
+        The matching ModelArtifact.
+
+    Raises:
+        RegistryError: If no artifact matching name (and version) is found.
+    """
+    # Strip dojo:// scheme and parse optional :version suffix
+    name = model_name
+    if name.startswith("dojo://"):
+        name = name[len("dojo://"):]
+    if ":" in name and version is None:
+        name, version = name.rsplit(":", 1)
+
+    backend = store if store is not None else _default_store()
+    all_ids = backend.list_artifacts()
+
+    # Match artifacts whose name prefix equals model_name
+    matches: list[dict] = []
+    for art_id in all_ids:
+        # artifact_id may be "model-name/v1" or "dojo://model-name/v1" etc.
+        stripped = art_id
+        if stripped.startswith("dojo://"):
+            stripped = stripped[len("dojo://"):]
+        # Split off version segment (last "/"-delimited token)
+        if "/" in stripped:
+            art_name, art_ver = stripped.rsplit("/", 1)
+        else:
+            art_name, art_ver = stripped, ""
+
+        if art_name == name:
+            matches.append({"artifact_id": art_id, "version": art_ver})
+
+    if not matches:
+        raise RegistryError(
+            f"No artifacts found for model '{model_name}'",
+            reason=f"Searched {len(all_ids)} registry entries; name prefix '{name}' not matched",
+        )
+
+    if version is None or version == "latest":
+        # Return lexicographically greatest version
+        target = max(matches, key=lambda m: m["version"])
+    else:
+        candidates = [m for m in matches if m["version"] == version]
+        if not candidates:
+            available = ", ".join(m["version"] for m in matches)
+            raise RegistryError(
+                f"Version '{version}' of model '{name}' not found",
+                reason=f"Available versions: {available}",
+            )
+        target = candidates[0]
+
+    logger = EvidenceLogger.get_instance()
+    logger.emit(
+        {
+            "type": "registry.lookup_version",
+            "data": {
+                "model_name": name,
+                "requested_version": version,
+                "resolved_artifact_id": target["artifact_id"],
+                "resolved_version": target["version"],
+            },
+        },
+        organ="registry",
+    )
+
+    return backend.load(target["artifact_id"])
+
+
+@one_door("registry.list_versions")
+def list_versions(
+    model_name: str,
+    store: Optional[LocalRegistryStore] = None,
+) -> list:
+    """List all registered versions of a named model.
+
+    Args:
+        model_name: Logical model name (``dojo://`` prefix is stripped).
+
+    Returns:
+        Sorted list of version strings for the given model name.
+        Empty list if no matching artifacts exist.
+    """
+    name = model_name
+    if name.startswith("dojo://"):
+        name = name[len("dojo://"):]
+    if ":" in name:
+        name = name.rsplit(":", 1)[0]
+
+    backend = store if store is not None else _default_store()
+    all_ids = backend.list_artifacts()
+
+    versions: list[str] = []
+    for art_id in all_ids:
+        stripped = art_id
+        if stripped.startswith("dojo://"):
+            stripped = stripped[len("dojo://"):]
+        if "/" in stripped:
+            art_name, art_ver = stripped.rsplit("/", 1)
+        else:
+            art_name, art_ver = stripped, ""
+        if art_name == name and art_ver:
+            versions.append(art_ver)
+
+    return sorted(versions)
+
+
 @one_door("registry.integrity_check")
 def registry_integrity_check(
     store: Optional[LocalRegistryStore] = None,
@@ -203,6 +331,8 @@ def registry_integrity_check(
 __all__ = [
     "register",
     "lookup",
+    "lookup_version",
+    "list_versions",
     "list_artifacts",
     "delete_artifact",
     "registry_integrity_check",

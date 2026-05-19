@@ -628,7 +628,22 @@ def _require_vllm() -> None:
 
 
 def _real_gpu_mode() -> bool:
-    return os.environ.get("DOJO_REAL_GPU", "0") == "1"
+    """Return True when real vLLM execution should be attempted.
+
+    Real mode activates when:
+    - DOJO_REAL_GPU=1 is set explicitly, OR
+    - vllm is importable (installed on this machine — e.g. Linux/WSL with GPU).
+
+    This removes the hard DOJO_REAL_GPU=1 gate for machines where vllm IS
+    installed, while keeping stub mode on machines where vllm is absent (CI/Windows).
+    """
+    if os.environ.get("DOJO_REAL_GPU", "0") == "1":
+        return True
+    try:
+        import vllm  # noqa: F401
+        return True
+    except ImportError:
+        return False
 
 
 def _inline_engine_requested() -> bool:

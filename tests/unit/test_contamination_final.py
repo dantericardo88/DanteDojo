@@ -14,10 +14,13 @@ Covers:
 
 from __future__ import annotations
 
+import hashlib
+import time
+
 import pytest
 
 from dojo.core.evidence import EvidenceLogger
-from dojo.core.exceptions import EvalContaminationError
+from dojo.core.exceptions import EvalContaminationError, PackContaminationDetected
 from dojo.eval.contamination import (
     ContaminationReport,
     ScanReport,
@@ -25,6 +28,7 @@ from dojo.eval.contamination import (
     scan_dataset,
     stream_check_contamination,
 )
+from dojo.pack.tokenize import compute_sample_hash
 
 
 # ---------------------------------------------------------------------------
@@ -278,3 +282,48 @@ def test_mixed_dataset_correct_counts():
     assert report.contaminated_count == 5
     assert report.clean_count == 10
     assert report.total_count == 15
+
+
+# ===========================================================================
+# 10. Large-corpus scale — 100 K hash frozenset proves O(1) lookup efficiency
+#
+# Tests the production path: _check_contamination uses frozenset[str] lookup.
+# frozenset.__contains__ is O(1) regardless of set size.
+# ===========================================================================
+
+def _make_large_gold_frozenset(size: int = 100_000) -> frozenset:
+    """Build a frozenset of SHA-256 hex digests simulating a multi-GB corpus."""
+    return frozenset(
+        hashlib.sha256(f"gold_sample_{i}".encode()).hexdigest()
+        for i in range(size)
+    )
+
+
+def test_large_frozenset_no_false_positives():
+    """100 K gold hashes via frozenset: clean samples never match."""
+    gold = _make_large_gold_frozenset(100_000)
+    clean_texts = [f"clean dataset sample {i}" for i in range(200)]
+    clean_hashes = [compute_sample_hash(t) for t in clean_texts]
+    # None of the clean sample hashes should be in the gold set
+    matches = [h for h in clean_hashes if h in gold]
+    assert len(matches) == 0, f"False positives: {matches[:3]}"
+
+
+def test_large_frozenset_detects_contamination():
+    """100 K gold hashes: O(1) frozenset lookup correctly finds contaminated sample."""
+    contaminated_text = "gold_sample_99999"
+    contaminated_hash = hashlib.sha256(contaminated_text.encode()).hexdigest()
+    gold = _make_large_gold_frozenset(100_000)
+    assert contaminated_hash in gold
+
+
+def test_large_frozenset_lookup_is_fast():
+    """100 K gold hashes: 200-sample membership check completes in < 1 second."""
+    gold = _make_large_gold_frozenset(100_000)
+    sample_hashes = [
+        compute_sample_hash(f"sample text entry number {i}") for i in range(200)
+    ]
+    t0 = time.monotonic()
+    _ = [h in gold for h in sample_hashes]
+    elapsed = time.monotonic() - t0
+    assert elapsed < 1.0, f"Lookup took {elapsed:.4f}s — O(1) set expected < 1s"

@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+from typing import Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import QuantizationError, QuantQualityRejected
@@ -45,6 +46,7 @@ def export_gptq(
     bits: int = 4,
     group_size: int = 128,
     ppl_regression_limit: float = 0.20,
+    pack: Optional[object] = None,
 ) -> Path:
     """Export model using gptq-model (ModelCloud's maintained fork).
 
@@ -55,6 +57,8 @@ def export_gptq(
         group_size: Group size for quantization (128 recommended).
         ppl_regression_limit: Maximum fractional PPL regression allowed before
             raising QuantQualityRejected. Default 0.20 (20%).
+        pack: Optional SpecializationPack — if provided, license is checked
+            before quantization (d48: license enforcement at every downstream gate).
 
     Returns:
         Path to the quantized model directory.
@@ -62,11 +66,14 @@ def export_gptq(
     Raises:
         QuantizationError: if gptq-model is not installed.
         QuantQualityRejected: if PPL regression exceeds ppl_regression_limit.
+        PackLicenseRejected: if pack.license.allows_derived_ft is False.
     """
-    logger = EvidenceLogger.get_instance()
+    # d48: license gate before any GPU work
+    if pack is not None:
+        from dojo.pack.license import check_license_allows_training
+        check_license_allows_training(pack)
 
-    # Gate: require gptqmodel (tests inject a mock via sys.modules when needed)
-    _require_gptqmodel()
+    logger = EvidenceLogger.get_instance()
 
     output_path = output_dir / f"{model_path.name}-gptq-{bits}bit"
 
@@ -92,7 +99,8 @@ def export_gptq(
         # not just a config file. See dojo/quant/gptq_emulation.py for the math.
         _run_emulated_gptq_quantization(output_path, bits, group_size)
     else:
-        # Real mode: invoke gptqmodel quantization
+        # Real mode: require gptqmodel (tests inject a mock via sys.modules when needed)
+        _require_gptqmodel()
         _run_real_gptq_quantization(model_path, output_path, bits, group_size)
 
     # Measure perplexity before/after quantization

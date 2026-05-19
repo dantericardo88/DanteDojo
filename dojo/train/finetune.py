@@ -19,9 +19,12 @@ from dojo.core.one_door import one_door
 from dojo.core.types import HALProfile, HardwareTier, PrecisionType, TrainingBackend
 from dojo.experiment.tracker import ExperimentTracker, RunConfig
 from dojo.experiment.wandb_adapter import WandBTrainingCallback
+from dojo.hal.env_detect import RuntimeEnv, detect_runtime, wsl_available
 from dojo.pack.license import check_license_allows_training
 from dojo.pack.schema import SpecializationPack
+from dojo.train.auto_setup import ensure_training_deps
 from dojo.train.base import BaseTrainer, FinetuneConfig, FinetuneResult, TrainingState
+from dojo.train.wsl_backend import run_training_in_wsl
 from dojo.train.checkpoint import CheckpointManager
 from dojo.train.context import ContextLengthManager
 
@@ -55,8 +58,32 @@ _FP8_MIN_SM = 8.9
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+_LINUX_ONLY_BACKENDS = frozenset({TrainingBackend.UNSLOTH, TrainingBackend.AXOLOTL})
+
+
 def _select_backend(profile: HALProfile) -> TrainingBackend:
-    return _BACKEND_MAP.get(profile.tier, TrainingBackend.NATIVE)
+    hardware_backend = _BACKEND_MAP.get(profile.tier, TrainingBackend.NATIVE)
+    # NATIVE always works on any platform — never override it
+    if hardware_backend == TrainingBackend.NATIVE:
+        return TrainingBackend.NATIVE
+    runtime = detect_runtime().runtime
+    if runtime == RuntimeEnv.WINDOWS_WSL:
+        # WSL2 available: delegate Linux-only backends to WSL subprocess,
+        # but only if TRL is not available natively.  TRL works on Windows
+        # without WSL and is preferred when installed (avoids WSL python3 dep).
+        if hardware_backend in _LINUX_ONLY_BACKENDS:
+            if _is_backend_available(TrainingBackend.TRL):
+                return TrainingBackend.TRL
+            return TrainingBackend.WSL_UNSLOTH
+    elif runtime == RuntimeEnv.WINDOWS_NATIVE:
+        # Windows-native: replace Linux-only backends with TRL
+        if hardware_backend in _LINUX_ONLY_BACKENDS:
+            return TrainingBackend.TRL
+    elif runtime == RuntimeEnv.MACOS:
+        # macOS: tier already maps MLX for APPLE_M4; others fall to TRL
+        if hardware_backend not in (TrainingBackend.MLX, TrainingBackend.NATIVE):
+            return TrainingBackend.TRL
+    return hardware_backend
 
 
 def _is_backend_available(backend: TrainingBackend) -> bool:
@@ -73,6 +100,15 @@ def _is_backend_available(backend: TrainingBackend) -> bool:
             return True
         except ImportError:
             return False
+    if backend == TrainingBackend.TRL:
+        try:
+            import importlib
+            importlib.import_module("trl")
+            return True
+        except ImportError:
+            return False
+    if backend == TrainingBackend.WSL_UNSLOTH:
+        return wsl_available()
     # NATIVE — always consider available as a fallback
     return True
 
@@ -266,7 +302,12 @@ def _run_real_sft(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = transformers.AutoModelForCausalLM.from_pretrained(config.base_model)
+    import torch as _torch
+    model = transformers.AutoModelForCausalLM.from_pretrained(
+        config.base_model,
+        torch_dtype=_torch.bfloat16,
+        device_map="auto",
+    )
     samples = getattr(pack, "samples", None) or []
     dataset = ds.Dataset.from_list(samples)
 
@@ -283,7 +324,7 @@ def _run_real_sft(
         model=model,
         args=training_args,
         train_dataset=dataset,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
     )
 
     # torch.autocast with bfloat16 — use CUDA when available, otherwise CPU
@@ -359,7 +400,18 @@ def _run_real_qlora(
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
-    model = transformers.AutoModelForCausalLM.from_pretrained(config.base_model)
+    import torch as _torch
+    bnb_config = transformers.BitsAndBytesConfig(
+        load_in_4bit=True,
+        bnb_4bit_quant_type="nf4",
+        bnb_4bit_compute_dtype=_torch.bfloat16,
+        bnb_4bit_use_double_quant=True,
+    )
+    model = transformers.AutoModelForCausalLM.from_pretrained(
+        config.base_model,
+        quantization_config=bnb_config,
+        device_map="auto",
+    )
     model = peft.prepare_model_for_kbit_training(model)
 
     # --- Triton kernel registration (after model load, before training) ---
@@ -402,7 +454,7 @@ def _run_real_qlora(
         model=model,
         args=training_args,
         train_dataset=dataset,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
         peft_config=lora_config,
     )
 
@@ -584,6 +636,12 @@ def finetune(
         # ---- ROUTING → PREPARING --------------------------------------------
         trainer.transition(TrainingState.PREPARING)
 
+        # Auto-install missing training dependencies for selected backend
+        try:
+            ensure_training_deps(backend, quiet=True)
+        except Exception:
+            pass
+
         # Pre-flight VRAM check (raises VRAMExceeded if over limit)
         _check_vram(config, hal_profile)
 
@@ -647,6 +705,18 @@ def finetune(
             steps_completed, final_loss = _run_real_fp8(config, logger, ckpt_mgr, pack)
         elif config.training_mode == "bf16":
             steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
+        elif backend == TrainingBackend.WSL_UNSLOTH:
+            # Delegate to WSL2 subprocess — unsloth + triton on Windows host
+            pack_samples = getattr(pack, "samples", None) or []
+            wsl_result = run_training_in_wsl(config, pack_samples)
+            steps_completed, final_loss = wsl_result.steps_completed, wsl_result.final_loss
+            ckpt_mgr.save(steps_completed, {"loss": final_loss, "backend": "wsl_unsloth"})
+        elif backend == TrainingBackend.TRL:
+            # TRL works on Windows-native, Linux, macOS — no GPU gate needed
+            if config.training_mode == "sft":
+                steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
+            else:
+                steps_completed, final_loss = _run_real_qlora(config, logger, ckpt_mgr, pack)
         elif not real_gpu and backend == TrainingBackend.NATIVE:
             # NATIVE backend (CPU / AMD MI300 / Intel B580) always does real training.
             # _TinyDecoderLM runs on any device — no GPU gate needed.
@@ -686,6 +756,21 @@ def finetune(
 
         exp_tracker.log_metrics_batch(
             {"final_loss": final_loss, "steps_completed": float(steps_completed), "wall_time_seconds": wall_time}
+        )
+
+        # Wire completed run into leaderboard (d44)
+        from dojo.experiment.leaderboard import RunLeaderboard
+        _lb = RunLeaderboard(primary_metric="final_loss", higher_is_better=False)
+        _lb.add_run(
+            run_id=exp_tracker._active_run_id or "unknown",
+            run_name=run_cfg.run_name,
+            experiment_name=run_cfg.experiment_name,
+            metrics={
+                "final_loss": final_loss,
+                "steps_completed": float(steps_completed),
+                "wall_time_seconds": wall_time,
+            },
+            params={"base_model": config.base_model, "num_epochs": config.num_epochs},
         )
 
         logger.emit(

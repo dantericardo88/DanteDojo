@@ -248,10 +248,13 @@ class TestExportAwqQualityGate:
 
 
 class TestExportAwqMissingDependency:
-    def test_export_awq_missing_autoawq(self, tmp_path):
-        """ImportError on awq module must raise QuantizationError with install hint."""
+    def test_export_awq_missing_autoawq(self, tmp_path, monkeypatch):
+        """ImportError on awq module must raise QuantizationError in real-GPU mode."""
         model_dir = tmp_path / "model"
         model_dir.mkdir()
+
+        # Must test in real-GPU mode — stub mode skips _require_autoawq() by design.
+        monkeypatch.setenv("DOJO_REAL_GPU", "1")
 
         with patch.dict(sys.modules, {"awq": None}):
             from dojo.quant import awq as awq_module

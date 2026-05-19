@@ -63,6 +63,7 @@ def export_gguf(
     *,
     profile: Optional[HALProfile] = None,
     passport_id: str = "",
+    pack: Optional[object] = None,
 ) -> Path:
     """Export model to GGUF format via llama.cpp.
 
@@ -72,6 +73,8 @@ def export_gguf(
         quant_type: llama.cpp quantization type (e.g. Q4_K_M, Q5_K_M).
         profile: Optional HALProfile for hardware-aware decisions.
         passport_id: Constitutional passport ID to embed in GGUF metadata.
+        pack: Optional SpecializationPack — if provided, license is checked
+            before export (d48: license enforcement at every downstream gate).
 
     Returns:
         Path to the exported .gguf file.
@@ -79,7 +82,13 @@ def export_gguf(
     Raises:
         QuantizationError: if conversion fails or llama.cpp is unavailable
             and stub mode is disabled.
+        PackLicenseRejected: if pack.license.allows_derived_ft is False.
     """
+    # d48: license gate before any I/O — same as training gate
+    if pack is not None:
+        from dojo.pack.license import check_license_allows_training
+        check_license_allows_training(pack)
+
     # Validate quant_type early — fail-closed before any I/O
     if quant_type not in VALID_QUANT_TYPES:
         valid_list = ", ".join(VALID_QUANT_TYPES)
