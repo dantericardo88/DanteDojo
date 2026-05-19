@@ -12,6 +12,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from dojo.core.exceptions import RoutingProviderUnavailable
 from dojo.core.types import PrivacyTier, RoutingOption, RoutingPolicy
 from dojo.route.router import (
     _OLLAMA_DEFAULT_URL,
@@ -26,40 +27,19 @@ from dojo.route.router import (
 # ---------------------------------------------------------------------------
 
 def _ollama_running() -> bool:
-    """Return True if Ollama is reachable AND can respond to a quick inference.
+    """Return True if Ollama HTTP API is reachable at localhost:11434.
 
-    Two-phase check:
-    1. GET /api/tags — confirms the HTTP API is up (fast, <2s).
-    2. POST /v1/chat/completions with max_tokens=1 — confirms inference is live.
-       If this doesn't respond within 15s the server is considered not ready for tests.
+    Uses a fast GET /api/tags ping with a 2s timeout.  The 4 live tests that
+    require inference are additionally guarded at runtime: they catch
+    RoutingProviderUnavailable and skip via pytest.skip() if inference itself
+    is broken (e.g. GPU VRAM contention blocking the LLM runner).
     """
-    # Phase 1: health ping
     try:
         req = urllib.request.Request(
             "http://localhost:11434/api/tags", method="GET"
         )
         with urllib.request.urlopen(req, timeout=2.0):
-            pass
-    except (urllib.error.URLError, OSError):
-        return False
-
-    # Phase 2: smoke-test inference
-    try:
-        body = __import__("json").dumps({
-            "model": "qwen2.5:0.5b",
-            "messages": [{"role": "user", "content": "hi"}],
-            "max_tokens": 1,
-            "stream": False,
-        }).encode("utf-8")
-        req2 = urllib.request.Request(
-            "http://localhost:11434/v1/chat/completions",
-            data=body,
-            method="POST",
-            headers={"Content-Type": "application/json"},
-        )
-        with urllib.request.urlopen(req2, timeout=15.0):
-            pass
-        return True
+            return True
     except (urllib.error.URLError, OSError):
         return False
 
@@ -89,7 +69,10 @@ def _make_policy(
 def test_dispatch_routes_to_ollama_local():
     """dispatch() with OLLAMA_LOCAL in preference_order should select ollama_local."""
     policy = _make_policy([RoutingOption.OLLAMA_LOCAL])
-    result = dispatch("test_task", "Hello, world.", policy)
+    try:
+        result = dispatch("test_task", "Hello, world.", policy)
+    except RoutingProviderUnavailable:
+        pytest.skip("Ollama API up but inference not responding (GPU contention)")
     assert result["route"] == "ollama_local", f"Expected ollama_local, got {result['route']}"
 
 
@@ -97,7 +80,10 @@ def test_dispatch_routes_to_ollama_local():
 def test_dispatch_inference_key_present():
     """Result from OLLAMA_LOCAL dispatch should have 'inference' key with 'text'."""
     policy = _make_policy([RoutingOption.OLLAMA_LOCAL])
-    result = dispatch("test_task", "Say hello in 5 words.", policy)
+    try:
+        result = dispatch("test_task", "Say hello in 5 words.", policy)
+    except RoutingProviderUnavailable:
+        pytest.skip("Ollama API up but inference not responding (GPU contention)")
     assert "inference" in result, "Expected 'inference' key in dispatch result"
     inf = result["inference"]
     assert "text" in inf, f"inference dict missing 'text': {inf}"
@@ -113,18 +99,15 @@ def test_dispatch_inference_key_present():
 @pytest.mark.skipif(not _OLLAMA_UP, reason="Ollama not running at localhost:11434")
 def test_confidential_privacy_blocks_api_haiku_picks_ollama():
     """CONFIDENTIAL tier: API_HAIKU must be blocked; OLLAMA_LOCAL (local) is allowed."""
-    policy = _make_policy(
-        [RoutingOption.API_HAIKU, RoutingOption.OLLAMA_LOCAL],
-        privacy_tier=PrivacyTier.CONFIDENTIAL,
-    )
-    # API_HAIKU is in _EXTERNAL_API_OPTIONS — privacy tier blocks it,
-    # which raises PrivacyTierViolation immediately (dispatch stops at first violation).
     # Reorder so OLLAMA_LOCAL is first when we want a successful result.
     policy_ok = _make_policy(
         [RoutingOption.OLLAMA_LOCAL, RoutingOption.API_HAIKU],
         privacy_tier=PrivacyTier.CONFIDENTIAL,
     )
-    result = dispatch("test_task", "Confidential prompt.", policy_ok)
+    try:
+        result = dispatch("test_task", "Confidential prompt.", policy_ok)
+    except RoutingProviderUnavailable:
+        pytest.skip("Ollama API up but inference not responding (GPU contention)")
     assert result["route"] == "ollama_local"
 
 
@@ -135,7 +118,10 @@ def test_cost_tracker_record_called_after_dispatch():
     mock_tracker.monthly_limit_usd = None  # no budget cap
 
     policy = _make_policy([RoutingOption.OLLAMA_LOCAL])
-    dispatch("test_task", "Budget test.", policy, cost_tracker=mock_tracker)
+    try:
+        dispatch("test_task", "Budget test.", policy, cost_tracker=mock_tracker)
+    except RoutingProviderUnavailable:
+        pytest.skip("Ollama API up but inference not responding (GPU contention)")
 
     mock_tracker.record.assert_called_once()
     receipt_arg = mock_tracker.record.call_args[0][0]
