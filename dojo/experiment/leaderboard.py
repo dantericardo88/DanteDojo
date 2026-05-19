@@ -2,11 +2,13 @@
 
 Ranks multiple experiment runs by a primary metric and provides comparison
 utilities via compare_runs(). All operations emit constitutional evidence.
+Supports optional SQLite persistence via db_path, from_db(), and save_to_db().
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
@@ -46,10 +48,40 @@ class RunLeaderboard:
                           If False, lower values rank first (e.g. loss, perplexity).
     """
 
-    def __init__(self, primary_metric: str, higher_is_better: bool = True) -> None:
+    def __init__(
+        self,
+        primary_metric: str,
+        higher_is_better: bool = True,
+        db_path: Optional[Path] = None,
+    ) -> None:
         self.primary_metric = primary_metric
         self.higher_is_better = higher_is_better
         self._entries: List[LeaderboardEntry] = []
+        self._db_path: Optional[Path] = db_path
+        if self._db_path is not None:
+            self._init_db()
+
+    # ------------------------------------------------------------------
+    # SQLite persistence
+    # ------------------------------------------------------------------
+
+    def _init_db(self) -> None:
+        """Create the runs table in the SQLite DB if it does not exist."""
+        import json
+        import sqlite3
+
+        with sqlite3.connect(str(self._db_path)) as conn:
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS runs (
+                    run_id TEXT PRIMARY KEY,
+                    run_name TEXT NOT NULL,
+                    experiment_name TEXT NOT NULL,
+                    metrics TEXT NOT NULL,
+                    params TEXT NOT NULL,
+                    primary_metric TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
 
     # ------------------------------------------------------------------
     # Mutation
@@ -80,6 +112,25 @@ class RunLeaderboard:
             params=dict(params) if params else {},
         )
         self._entries.append(entry)
+
+        if self._db_path is not None:
+            import json
+            import sqlite3
+
+            with sqlite3.connect(str(self._db_path)) as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO runs "
+                    "(run_id, run_name, experiment_name, metrics, params, primary_metric) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (
+                        run_id,
+                        run_name,
+                        experiment_name,
+                        json.dumps(dict(metrics)),
+                        json.dumps(dict(params) if params else {}),
+                        self.primary_metric,
+                    ),
+                )
 
         EvidenceLogger.get_instance().emit(
             {
@@ -295,6 +346,84 @@ class RunLeaderboard:
                 metrics=metrics,
             )
         return lb
+
+    @classmethod
+    def from_db(
+        cls,
+        db_path: Path,
+        primary_metric: str = "loss",
+        higher_is_better: bool = False,
+    ) -> "RunLeaderboard":
+        """Load a RunLeaderboard from an existing SQLite database.
+
+        Existing entries are loaded directly into memory without re-emitting
+        evidence (they were already emitted when originally added).
+
+        Args:
+            db_path: Path to the SQLite database file.
+            primary_metric: Metric name used to order entries.
+            higher_is_better: Ranking direction for primary_metric.
+
+        Returns:
+            Populated RunLeaderboard backed by the given DB.
+        """
+        import json
+        import sqlite3
+
+        lb = cls(primary_metric=primary_metric, higher_is_better=higher_is_better, db_path=db_path)
+        with sqlite3.connect(str(db_path)) as conn:
+            rows = conn.execute(
+                "SELECT run_id, run_name, experiment_name, metrics, params FROM runs"
+            ).fetchall()
+        for row_id, row_name, row_exp, row_metrics, row_params in rows:
+            entry = LeaderboardEntry(
+                run_id=row_id,
+                run_name=row_name,
+                experiment_name=row_exp,
+                metrics=json.loads(row_metrics),
+                params=json.loads(row_params),
+            )
+            lb._entries.append(entry)
+        return lb
+
+    def save_to_db(self, db_path: Path) -> None:
+        """Export all current in-memory entries to a new SQLite database.
+
+        Creates (or overwrites) the runs table at ``db_path`` and inserts
+        every entry. Useful for backup or migration.
+
+        Args:
+            db_path: Destination path for the SQLite file.
+        """
+        import json
+        import sqlite3
+
+        with sqlite3.connect(str(db_path)) as conn:
+            conn.execute(
+                """CREATE TABLE IF NOT EXISTS runs (
+                    run_id TEXT PRIMARY KEY,
+                    run_name TEXT NOT NULL,
+                    experiment_name TEXT NOT NULL,
+                    metrics TEXT NOT NULL,
+                    params TEXT NOT NULL,
+                    primary_metric TEXT,
+                    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                )"""
+            )
+            for entry in self._entries:
+                conn.execute(
+                    "INSERT OR REPLACE INTO runs "
+                    "(run_id, run_name, experiment_name, metrics, params, primary_metric) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (
+                        entry.run_id,
+                        entry.run_name,
+                        entry.experiment_name,
+                        json.dumps(entry.metrics),
+                        json.dumps(entry.params),
+                        self.primary_metric,
+                    ),
+                )
 
 
 __all__ = [
