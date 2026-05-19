@@ -1,0 +1,54 @@
+{
+  "dim_id": "d12",
+  "callsite": "dojo.quant.fp4",
+  "parallel": null,
+  "score_before": 8.0,
+  "score_after": 8.0,
+  "capping_checks": [],
+  "skipped": false,
+  "skip_reason": "",
+  "checks": [
+    {
+      "name": "orphan-audit",
+      "passed": true,
+      "cap": null,
+      "reason": "1 production importer(s)"
+    },
+    {
+      "name": "hardcoded-fallback",
+      "passed": true,
+      "cap": null,
+      "reason": "no hardcoded literal-lists"
+    },
+    {
+      "name": "import-resolves",
+      "passed": true,
+      "cap": null,
+      "reason": "no silent ImportError swallow"
+    },
+    {
+      "name": "functional-diff",
+      "passed": true,
+      "cap": null,
+      "reason": "6 candidate callables (deferred to capability_test)"
+    },
+    {
+      "name": "primary-not-parallel",
+      "passed": true,
+      "cap": null,
+      "reason": "exempt: helper-by-design"
+    },
+    {
+      "name": "recency-check",
+      "passed": true,
+      "cap": null,
+      "reason": "1 importer(s) modified in last 30d: ['nf4.py']"
+    },
+    {
+      "name": "claim-auditor",
+      "passed": true,
+      "cap": null,
+      "reason": "no suspicious numeric claims"
+    }
+  ]
+}

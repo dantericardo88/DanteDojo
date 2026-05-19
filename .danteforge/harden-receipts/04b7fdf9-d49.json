@@ -1,0 +1,54 @@
+{
+  "dim_id": "d49",
+  "callsite": "dojo.cli",
+  "parallel": null,
+  "score_before": 8.0,
+  "score_after": 8.0,
+  "capping_checks": [],
+  "skipped": false,
+  "skip_reason": "",
+  "checks": [
+    {
+      "name": "orphan-audit",
+      "passed": true,
+      "cap": null,
+      "reason": "exempt: entry-point-by-design"
+    },
+    {
+      "name": "hardcoded-fallback",
+      "passed": true,
+      "cap": null,
+      "reason": "module not present (skip)"
+    },
+    {
+      "name": "import-resolves",
+      "passed": true,
+      "cap": null,
+      "reason": "module not present"
+    },
+    {
+      "name": "functional-diff",
+      "passed": true,
+      "cap": null,
+      "reason": "0 candidate callables (deferred to capability_test)"
+    },
+    {
+      "name": "primary-not-parallel",
+      "passed": true,
+      "cap": null,
+      "reason": "exempt: entry-point-by-design"
+    },
+    {
+      "name": "recency-check",
+      "passed": true,
+      "cap": null,
+      "reason": "exempt: entry-point-by-design"
+    },
+    {
+      "name": "claim-auditor",
+      "passed": true,
+      "cap": null,
+      "reason": "module not present"
+    }
+  ]
+}

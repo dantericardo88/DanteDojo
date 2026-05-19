@@ -1,0 +1,54 @@
+{
+  "dim_id": "d36",
+  "callsite": "dojo.route.router",
+  "parallel": null,
+  "score_before": 9.0,
+  "score_after": 9.0,
+  "capping_checks": [],
+  "skipped": false,
+  "skip_reason": "",
+  "checks": [
+    {
+      "name": "orphan-audit",
+      "passed": true,
+      "cap": null,
+      "reason": "exempt: entry-point-by-design"
+    },
+    {
+      "name": "hardcoded-fallback",
+      "passed": true,
+      "cap": null,
+      "reason": "no hardcoded literal-lists"
+    },
+    {
+      "name": "import-resolves",
+      "passed": true,
+      "cap": null,
+      "reason": "no silent ImportError swallow"
+    },
+    {
+      "name": "functional-diff",
+      "passed": true,
+      "cap": null,
+      "reason": "9 candidate callables (deferred to capability_test)"
+    },
+    {
+      "name": "primary-not-parallel",
+      "passed": true,
+      "cap": null,
+      "reason": "exempt: entry-point-by-design"
+    },
+    {
+      "name": "recency-check",
+      "passed": true,
+      "cap": null,
+      "reason": "exempt: entry-point-by-design"
+    },
+    {
+      "name": "claim-auditor",
+      "passed": true,
+      "cap": null,
+      "reason": "no suspicious numeric claims"
+    }
+  ]
+}

@@ -85,6 +85,19 @@ DIMENSION_CALLSITES: Dict[str, Tuple[str, Optional[str], Optional[str]]] = {
     "d46": ("dojo.train.axolotl_schema", None, "helper-by-design"),
     "d47": ("dojo.serve.backend_cascade", None, "helper-by-design"),
     "d48": ("dojo.train.recipe_diff", None, "helper-by-design"),
+    # Score-8 dims that already exist in production with real wiring
+    "d13": ("dojo.promote.gate", None, "entry-point-by-design"),
+    "d15": ("dojo.kernels.attention", None, "entry-point-by-design"),
+    "d16": ("dojo.train.finetune", None, "entry-point-by-design"),
+    "d17": ("dojo.train.finetune", None, "entry-point-by-design"),
+    "d18": ("dojo.train.grpo_trainer", None, "entry-point-by-design"),
+    "d19": ("dojo.train.dpo_trainer", None, "entry-point-by-design"),
+    "d28": ("dojo.stream.prefetch_governor", None, "entry-point-by-design"),
+    "d33": ("dojo.route.router", None, "entry-point-by-design"),
+    "d41": ("dojo.eval.judge", None, "entry-point-by-design"),
+    "d45": ("dojo.experiment.wandb_adapter", None, "entry-point-by-design"),
+    "d49": ("dojo.cli", None, "entry-point-by-design"),
+    "d29": ("dojo.serve.openai_compat", None, "entry-point-by-design"),
 }
 
 
