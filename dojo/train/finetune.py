@@ -277,6 +277,7 @@ def _run_real_sft(
     logger: EvidenceLogger,
     ckpt_mgr: CheckpointManager,
     pack: SpecializationPack,
+    exp_tracker: "Any" = None,
 ) -> tuple[int, float]:
     """SFT fine-tuning with BF16 mixed precision (torch.autocast + bfloat16)."""
     logger.emit(
@@ -316,6 +317,16 @@ def _run_real_sft(
     _wandb_adapter.init_run(config)
     _wandb_cb: WandBTrainingCallback = _wandb_adapter.as_callback()
 
+    # Step-level metric callback — logs train/loss to experiment tracker at each step
+    _step_cbs: list = []
+    if exp_tracker is not None:
+        _tracker_ref = exp_tracker
+        class _StepMetricCallback(transformers.TrainerCallback):
+            def on_log(self, args: Any, state: Any, control: Any, logs: Any = None, **kw: Any) -> None:
+                if logs and "loss" in logs:
+                    _tracker_ref.log_metric("train/loss", float(logs["loss"]), step=state.global_step)
+        _step_cbs.append(_StepMetricCallback())
+
     training_args = trl.SFTConfig(
         output_dir=str(config.output_dir),
         num_train_epochs=config.num_epochs,
@@ -325,6 +336,7 @@ def _run_real_sft(
         args=training_args,
         train_dataset=dataset,
         processing_class=tokenizer,
+        callbacks=_step_cbs if _step_cbs else None,
     )
 
     # torch.autocast with bfloat16 — use CUDA when available, otherwise CPU
@@ -381,6 +393,7 @@ def _run_real_qlora(
     logger: EvidenceLogger,
     ckpt_mgr: CheckpointManager,
     pack: SpecializationPack,
+    exp_tracker: "Any" = None,
 ) -> tuple[int, float]:
     """QLoRA fine-tuning with 4-bit quantization and PEFT LoRA adapters."""
     try:
@@ -446,6 +459,16 @@ def _run_real_qlora(
     _wandb_adapter.init_run(config)
     _qlora_wandb_cb: WandBTrainingCallback = _wandb_adapter.as_callback()
 
+    # Step-level metric callback — logs train/loss to experiment tracker at each step
+    _qlora_step_cbs: list = []
+    if exp_tracker is not None:
+        _qlora_tracker_ref = exp_tracker
+        class _QLoRAStepMetricCallback(transformers.TrainerCallback):
+            def on_log(self, args: Any, state: Any, control: Any, logs: Any = None, **kw: Any) -> None:
+                if logs and "loss" in logs:
+                    _qlora_tracker_ref.log_metric("train/loss", float(logs["loss"]), step=state.global_step)
+        _qlora_step_cbs.append(_QLoRAStepMetricCallback())
+
     training_args = trl.SFTConfig(
         output_dir=str(config.output_dir),
         num_train_epochs=config.num_epochs,
@@ -456,6 +479,7 @@ def _run_real_qlora(
         train_dataset=dataset,
         processing_class=tokenizer,
         peft_config=lora_config,
+        callbacks=_qlora_step_cbs if _qlora_step_cbs else None,
     )
 
     result = trainer.train()
@@ -704,7 +728,7 @@ def finetune(
         elif config.training_mode == "fp8":
             steps_completed, final_loss = _run_real_fp8(config, logger, ckpt_mgr, pack)
         elif config.training_mode == "bf16":
-            steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
+            steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack, exp_tracker=exp_tracker)
         elif backend == TrainingBackend.WSL_UNSLOTH:
             # Delegate to WSL2 subprocess — unsloth + triton on Windows host
             pack_samples = getattr(pack, "samples", None) or []
@@ -714,9 +738,9 @@ def finetune(
         elif backend == TrainingBackend.TRL:
             # TRL works on Windows-native, Linux, macOS — no GPU gate needed
             if config.training_mode == "sft":
-                steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
+                steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack, exp_tracker=exp_tracker)
             else:
-                steps_completed, final_loss = _run_real_qlora(config, logger, ckpt_mgr, pack)
+                steps_completed, final_loss = _run_real_qlora(config, logger, ckpt_mgr, pack, exp_tracker=exp_tracker)
         elif not real_gpu and backend == TrainingBackend.NATIVE:
             # NATIVE backend (CPU / AMD MI300 / Intel B580) always does real training.
             # _TinyDecoderLM runs on any device — no GPU gate needed.
@@ -729,9 +753,9 @@ def finetune(
             _maybe_emit_nf4_config()
             steps_completed, final_loss = _simulate_training_steps(config, logger, ckpt_mgr)
         elif config.training_mode == "sft":
-            steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack)
+            steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack, exp_tracker=exp_tracker)
         else:
-            steps_completed, final_loss = _run_real_qlora(config, logger, ckpt_mgr, pack)
+            steps_completed, final_loss = _run_real_qlora(config, logger, ckpt_mgr, pack, exp_tracker=exp_tracker)
 
         import math
         if math.isnan(final_loss) or math.isinf(final_loss):

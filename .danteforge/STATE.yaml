@@ -1,11 +1,14 @@
 project: DanteDojo
 lastHandoff: initialized
-workflowStage: initialized
+workflowStage: plan
 currentPhase: 0
 tasks: {}
-auditLog: []
+auditLog:
+  - "2026-05-17T23:05:54.843Z | mcp: state read"
+  - "2026-05-17T23:05:56.259Z | mcp: score_all"
 profile: balanced
 enforcementMode: strict
 projectType: unknown
+selfEditPolicy: deny
 maxBudgetUsd: 10
 routingAggressiveness: balanced
