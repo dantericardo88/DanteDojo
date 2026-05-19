@@ -362,3 +362,33 @@ class InferenceLoopSimulator:
             "peak_vram_mb": peak_vram_mb,
             "layers_loaded": layers_loaded,
         }
+
+
+# ---------------------------------------------------------------------------
+# KV-cache streamed inference adapter (d27)
+# ---------------------------------------------------------------------------
+
+def run_kv_streamed_inference(
+    layer_ids: List[str],
+    query: "Any",
+    head_dim: int = 64,
+    vocab_size: int = 1024,
+    seq_len: int = 8,
+) -> List[int]:
+    """Run real scaled-dot-product attention over a streamed KV cache.
+
+    Wraps dojo.stream.kv_streamed_inference.KvStreamedInferenceLoop so the
+    rest of the streaming module can offer the user a single inference
+    entry point.  Each layer's KV is streamed in, attention runs, KV is
+    evicted before the next layer loads.
+
+    Returns the list of generated token ids (one per layer).
+    """
+    from dojo.stream.kv_streamed_inference import KvStreamedInferenceLoop
+    loop = KvStreamedInferenceLoop(
+        layer_ids=layer_ids,
+        head_dim=head_dim,
+        vocab_size=vocab_size,
+        seq_len=seq_len,
+    )
+    return loop.run(query)

@@ -461,12 +461,30 @@ def dispatch(
     if cost_tracker is not None:
         cost_tracker.record(receipt)
 
+    # Sign the cost receipt so downstream auditors can verify the dispatch
+    # without trusting the cost_tracker JSONL log. See dojo/route/cost_receipts.py.
+    from dojo.route.cost_receipts import build_cost_receipt, sign_cost_receipt
+    signed_receipt = sign_cost_receipt(build_cost_receipt(
+        request_id=str(getattr(receipt, "receipt_id", "") or _receipt_uuid()),
+        provider=_provider_name(chosen),
+        prompt_tokens=int(getattr(receipt, "input_tokens", 0)),
+        completion_tokens=int(getattr(receipt, "output_tokens", 0)),
+        usd_cost=float(getattr(receipt, "estimated_cost_usd", 0.0)),
+        privacy_tier=policy.privacy_tier.value,
+    ))
+
     return {
         "route": chosen.value,
         "endpoint_url": endpoint_url,
         "reason": reason,
         "cost_receipt": receipt,
+        "signed_cost_receipt": signed_receipt,
     }
+
+
+def _receipt_uuid() -> str:
+    import uuid
+    return uuid.uuid4().hex
 
 
 # ---------------------------------------------------------------------------

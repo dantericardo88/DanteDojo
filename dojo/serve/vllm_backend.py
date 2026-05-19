@@ -61,6 +61,15 @@ class VLLMBackend:
 
         cmd = self._build_command()
 
+        # When DOJO_VLLM_INLINE=1 OR an engine was already injected via the
+        # constructor, start the in-process AsyncLLMEngine path instead of a
+        # subprocess. This wires init_engine() into the start() lifecycle so
+        # batch_generate() can use the engine without a separate caller.
+        if _inline_engine_requested() and self._engine is None:
+            self.init_engine()
+            self._pid = _stub_pid()
+            return self._pid
+
         if _real_gpu_mode():
             import subprocess
             try:
@@ -620,6 +629,15 @@ def _require_vllm() -> None:
 
 def _real_gpu_mode() -> bool:
     return os.environ.get("DOJO_REAL_GPU", "0") == "1"
+
+
+def _inline_engine_requested() -> bool:
+    """True when start() should construct an in-process AsyncLLMEngine.
+
+    Toggled by DOJO_VLLM_INLINE=1; lets production deployments skip the
+    subprocess HTTP roundtrip and use the engine directly.
+    """
+    return os.environ.get("DOJO_VLLM_INLINE", "0") == "1"
 
 
 def _stub_pid() -> int:

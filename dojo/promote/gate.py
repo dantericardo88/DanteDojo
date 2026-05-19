@@ -180,7 +180,15 @@ def promote(
     revocation_url = passport.revocation_url or ""
     if revocation_url:
         from dojo.promote.revocation import check_revocation  # noqa: PLC0415
+        # Fail-closed strict check first: network errors revoke the passport
+        # rather than letting it through. See dojo/core/revocation_strict.py.
+        from dojo.core.revocation_strict import StrictRevocationCheck
+        _strict = StrictRevocationCheck(
+            endpoint_url=revocation_url,
+            fail_closed=True,
+        )
         try:
+            _strict.gate(passport.passport_id)
             check_revocation(passport)
         except Exception as exc:
             fsm.transition(GateState.BLOCKED)

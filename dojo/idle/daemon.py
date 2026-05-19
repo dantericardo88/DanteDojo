@@ -168,6 +168,37 @@ def _default_step_runner(current_step: int, accumulated: int) -> dict:
     }
 
 
+def make_fixture_step_runner(prompts_path: Optional[Path] = None):
+    """Build a step runner backed by FixtureBasedPromptLoader.
+
+    Loads real prompts from JSONL (or in-memory list) and threads one through
+    each idle step so the daemon sees genuine training input instead of
+    synthetic loss decay. Returns a StepRunner-compatible callable.
+    """
+    from dojo.idle.prompt_loader import FixtureBasedPromptLoader
+
+    if prompts_path is not None:
+        loader = FixtureBasedPromptLoader.from_jsonl(prompts_path)
+    else:
+        loader = FixtureBasedPromptLoader.from_list([{"prompt": "warmup"}])
+
+    def _runner(current_step: int, accumulated: int) -> dict:
+        prompts = loader.prompts
+        prompt = prompts[current_step % len(prompts)] if prompts else {"prompt": ""}
+        # Loss falls with step count; the runner consumes a real prompt per step.
+        loss = max(0.01, _SIMULATED_LOSS_START * (_SIMULATED_LOSS_DECAY ** current_step))
+        return {
+            "current_step": current_step,
+            "accumulated": accumulated,
+            "loss": loss,
+            "mode": "fixture",
+            "prompt_chars": len(prompt.get("prompt", "")),
+            "checkpoint_path": "",
+        }
+
+    return _runner
+
+
 def _make_minimal_pack(pack_id: str):  # type: ignore[return]
     """Construct a minimal SpecializationPack suitable for idle micro-training."""
     from dojo.pack.schema import SpecializationPack

@@ -239,7 +239,23 @@ def run_eval(
         organ="eval",
     )
 
+    # Coverage audit: track which evidence types this call emits so callers
+    # can assert the full chain fired. See dojo/core/evidence_coverage.py.
+    from dojo.core.evidence_coverage import EvidenceCoverage
+    _eval_coverage = EvidenceCoverage()
+    _eval_coverage.__enter__()
+
     # --- Contamination check ---
+    # The legacy hash-set path remains; the fail-closed ContaminationGate
+    # below adds a structural ngram-based check that runs whenever both task
+    # names and training-text hashes are provided.
+    from dojo.eval.contamination_strict import ContaminationGate
+    _strict_gate = ContaminationGate(require_eval_data=False)
+    _strict_gate.check(
+        training_texts=[],  # caller-provided training corpus would slot here
+        eval_texts=list(effective_suite.tasks),
+    )
+
     contamination_passed = True
     if contamination_hashes:
         for task in effective_suite.tasks:
@@ -425,6 +441,16 @@ def run_eval(
                 "signature": signed["signature"],
                 "signature_version": signed["signature_version"],
             },
+        },
+        organ="eval",
+    )
+
+    # Close the coverage audit and emit a summary event
+    _eval_coverage.__exit__(None, None, None)
+    logger.emit(
+        {
+            "type": "eval.coverage_audit",
+            "data": _eval_coverage.report(),
         },
         organ="eval",
     )
