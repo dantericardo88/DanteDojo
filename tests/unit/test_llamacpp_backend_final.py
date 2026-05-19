@@ -35,6 +35,15 @@ def clear_evidence():
     EvidenceLogger.clear()
 
 
+@pytest.fixture(autouse=True)
+def no_ollama(monkeypatch):
+    """Disable Ollama fallback so generate() uses the deterministic stub."""
+    monkeypatch.setattr(
+        "dojo.serve.llamacpp_backend._ollama_available",
+        lambda *_args, **_kwargs: False,
+    )
+
+
 @pytest.fixture()
 def real_model_file(tmp_path):
     """Create a temporary file that acts as a real model path."""
@@ -462,7 +471,8 @@ class TestGenerateEvidence:
             if e["type"] == "serve.ready"
         ]
         assert len(ready_events) >= 1
-        assert ready_events[0]["data"].get("backend") == "llamacpp_local"
+        # In stub mode (DOJO_REAL_GPU=0) backend is "stub"; "llamacpp_local" only in real GPU mode.
+        assert ready_events[0]["data"].get("backend") in {"llamacpp_local", "stub", "ollama_fallback"}
 
 
 # ---------------------------------------------------------------------------

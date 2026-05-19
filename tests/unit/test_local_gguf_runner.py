@@ -42,6 +42,15 @@ def stub_gpu_mode(monkeypatch):
     monkeypatch.setenv("DOJO_REAL_GPU", "0")
 
 
+@pytest.fixture(autouse=True)
+def no_ollama(monkeypatch):
+    """Disable Ollama fallback so all generate() calls use the deterministic stub."""
+    monkeypatch.setattr(
+        "dojo.serve.llamacpp_backend._ollama_available",
+        lambda *_args, **_kwargs: False,
+    )
+
+
 @pytest.fixture()
 def mock_llama_cpp():
     """Inject a mock llama_cpp module so _require_llama_cpp() passes."""

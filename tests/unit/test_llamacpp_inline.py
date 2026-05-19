@@ -10,7 +10,23 @@ import inspect
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import pytest
+from unittest.mock import patch
+
 from dojo.serve.llamacpp_backend import LocalGGUFRunner
+
+
+# ---------------------------------------------------------------------------
+# Module-level fixture: disable Ollama so stub path is always reachable
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def _no_ollama(monkeypatch):
+    """Disable Ollama fallback in all tests in this module."""
+    monkeypatch.setattr(
+        "dojo.serve.llamacpp_backend._ollama_available",
+        lambda *_args, **_kwargs: False,
+    )
 
 
 # ---------------------------------------------------------------------------
