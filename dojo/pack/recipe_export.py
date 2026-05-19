@@ -161,10 +161,30 @@ def validate_recipe(data: Dict[str, Any]) -> None:
         )
 
 
+def diff_recipe_files(old_path: Path, new_path: Path) -> Dict[str, Any]:
+    """Load two recipes from disk and return a structured diff.
+
+    Delegates to dojo.train.recipe_diff.diff_recipes for the actual flattening
+    and comparison logic. Returns a dict ready for JSON serialization.
+    """
+    from dojo.train.recipe_diff import diff_recipes
+    old = load_recipe(old_path)
+    new = load_recipe(new_path)
+    diff = diff_recipes(old, new)
+    return {
+        "added": diff.added,
+        "removed": diff.removed,
+        "changed": [
+            {"path": c.path, "old": c.old, "new": c.new} for c in diff.changed
+        ],
+    }
+
+
 __all__ = [
     "RECIPE_REQUIRED_FIELDS",
     "RECIPE_VERSION",
     "export_recipe",
     "load_recipe",
     "validate_recipe",
+    "diff_recipe_files",
 ]

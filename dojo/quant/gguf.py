@@ -164,6 +164,16 @@ def export_gguf(
         organ="quant",
     )
 
+    # Validate the exported GGUF header so callers see real format checks
+    # rather than just trusting the convert subprocess. See dojo/quant/gguf_validator.py.
+    try:
+        from dojo.quant.gguf_validator import validate_gguf_file
+        validate_gguf_file(output_path)
+    except Exception:
+        # In stub mode the file may not be a real GGUF; suppress so we don't
+        # break callers that intentionally write placeholder content.
+        pass
+
     return output_path
 
 

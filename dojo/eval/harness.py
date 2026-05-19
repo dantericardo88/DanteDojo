@@ -458,8 +458,27 @@ def run_eval(
     return receipt
 
 
+def run_multi_judge_gate(
+    response: str,
+    criteria: "list[str]",
+    judges: "list[tuple[str, Any]]",
+    pass_threshold: float = 5.0,
+) -> dict:
+    """Multi-judge cross-validation gate used by callers that want drift
+    detection on top of single-judge polarity checks.
+
+    Thin wrapper that constructs MultiJudgeGate and returns its verdict.
+    Wired here so the eval harness has a single import path for the
+    multi-judge agreement check.
+    """
+    from dojo.eval.multi_judge_gate import MultiJudgeGate
+    gate = MultiJudgeGate(judges=judges, pass_threshold=pass_threshold)
+    return gate.evaluate(response, criteria)
+
+
 __all__ = [
     "EvalSuite",
     "EvalReceipt",
+    "run_multi_judge_gate",
     "run_eval",
 ]

@@ -430,9 +430,17 @@ def _run_real_qlora(
 def _detect_sm_version() -> float:
     """Return the GPU SM (compute capability) as a float, e.g. 8.9 for Ada.
 
-    Queries torch.cuda.get_device_capability() when CUDA is available.
-    Falls back to the DOJO_MOCK_SM environment variable for CI/testing.
+    First tries the nvidia-ml-py-preferred path in dojo/hal/sm_detect.py;
+    falls back to torch.cuda.get_device_capability(); finally falls back to
+    the DOJO_MOCK_SM environment variable for CI/testing.
     """
+    try:
+        from dojo.hal.sm_detect import detect_sm
+        info = detect_sm()
+        if info.available:
+            return info.sm_float
+    except Exception:
+        pass
     try:
         import torch
         if torch.cuda.is_available():

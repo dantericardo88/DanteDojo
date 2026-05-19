@@ -18,6 +18,23 @@ _INSTALL_INSTRUCTIONS = (
 )
 
 
+def select_4bit_precision_format() -> str:
+    """Pick between FP4 (Blackwell native) and NF4 (Ampere+) for 4-bit training.
+
+    Returns ``"fp4"`` when ``dojo.quant.fp4.requires_blackwell(sm)`` returns
+    True for the detected SM; otherwise returns ``"nf4"``.
+    """
+    try:
+        from dojo.quant.fp4 import requires_blackwell
+        from dojo.hal.sm_detect import detect_sm
+        info = detect_sm()
+        if info.available and requires_blackwell(info.sm_float):
+            return "fp4"
+    except Exception:
+        pass
+    return "nf4"
+
+
 def get_bnb_nf4_config() -> dict:
     """Return BitsAndBytesConfig kwargs dict for NF4 QLoRA training.
 
