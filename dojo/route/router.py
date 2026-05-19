@@ -6,9 +6,12 @@ privacy tiers, and records cost receipts.
 
 from __future__ import annotations
 
+import json
 import os
 import threading
 import time
+import urllib.error
+import urllib.request
 from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Callable, Optional
@@ -28,6 +31,9 @@ from dojo.core.types import (
 )
 
 from dojo.route.specialist_registry import SpecialistRegistry
+
+# Default Ollama base URL (OpenAI-compatible local inference server)
+_OLLAMA_DEFAULT_URL = "http://localhost:11434"
 
 # Module-level specialist registry. When set via configure_specialist_registry(),
 # _is_viable consults it for capability-aware filtering of LOCAL_SPECIALIST routes.
@@ -119,6 +125,7 @@ _EXTERNAL_API_OPTIONS: frozenset[RoutingOption] = frozenset({
 _LOCAL_OPTIONS: frozenset[RoutingOption] = frozenset({
     RoutingOption.LOCAL_SPECIALIST,
     RoutingOption.LOCAL_GENERALIST,
+    RoutingOption.OLLAMA_LOCAL,
 })
 
 # Stub cost estimates per external API route (USD per 1k tokens)
@@ -136,16 +143,74 @@ def _health_check_with_timeout(endpoint: str, timeout: float = 3.0) -> bool:
     Returns True if the server responds with any HTTP status, False on URLError.
     Only called when DOJO_REAL_GPU=1 or DOJO_HEALTH_CHECK=1 is set.
     """
-    import urllib.error
-    import urllib.request
-
     try:
         req = urllib.request.Request(endpoint, method="HEAD")
         with urllib.request.urlopen(req, timeout=timeout):
             pass
         return True
-    except urllib.error.URLError:
+    except (urllib.error.URLError, OSError):
         return False
+
+
+def _call_ollama_infer(
+    prompt: str,
+    url: str = _OLLAMA_DEFAULT_URL,
+    model: str = "qwen2.5:0.5b",
+    timeout: float = 30.0,
+) -> dict:
+    """Call Ollama's OpenAI-compatible /v1/chat/completions endpoint.
+
+    Args:
+        prompt: The user prompt to send.
+        url: Ollama base URL (default: http://localhost:11434).
+        model: Model name to use (default: qwen2.5:0.5b — the smallest/fastest).
+        timeout: Request timeout in seconds.
+
+    Returns:
+        dict with keys: "text" (str), "latency_ms" (float), "model" (str).
+
+    Raises:
+        RoutingProviderUnavailable: on any connection error.
+    """
+    from dojo.core.exceptions import RoutingProviderUnavailable
+
+    endpoint = f"{url}/v1/chat/completions"
+    body = json.dumps({
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 64,
+        "stream": False,
+    }).encode("utf-8")
+
+    req = urllib.request.Request(
+        endpoint,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/json"},
+    )
+
+    t0 = time.monotonic()
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            raw = resp.read()
+    except (urllib.error.URLError, OSError) as exc:
+        raise RoutingProviderUnavailable(
+            f"Ollama not reachable at {url}",
+            reason=str(exc),
+        ) from exc
+    elapsed_ms = (time.monotonic() - t0) * 1000.0
+
+    data = json.loads(raw)
+    text = (
+        data.get("choices", [{}])[0]
+        .get("message", {})
+        .get("content", "")
+    )
+    return {
+        "text": text,
+        "latency_ms": round(elapsed_ms, 2),
+        "model": model,
+    }
 
 
 def _record_provider_failure(option: RoutingOption) -> None:
@@ -428,10 +493,18 @@ def dispatch(
         )
 
     endpoint_url: Optional[str] = None
-    if chosen in _EXTERNAL_API_OPTIONS:
+    if chosen in _EXTERNAL_API_OPTIONS or chosen == RoutingOption.OLLAMA_LOCAL:
         endpoint_url = _api_endpoint(chosen)
 
-    receipt = _build_receipt(task, chosen, input_text)
+    # For OLLAMA_LOCAL: perform a real inference call and capture results.
+    inference_result: Optional[dict] = None
+    receipt_latency_ms: float = 0.0
+    if chosen == RoutingOption.OLLAMA_LOCAL:
+        inference_result = _call_ollama_infer(input_text, url=_OLLAMA_DEFAULT_URL)
+        receipt_latency_ms = inference_result.get("latency_ms", 0.0)
+        _record_provider_latency(chosen, receipt_latency_ms)
+
+    receipt = _build_receipt(task, chosen, input_text, latency_ms=receipt_latency_ms)
 
     # Budget enforcement before committing the route
     if (
@@ -473,13 +546,16 @@ def dispatch(
         privacy_tier=policy.privacy_tier.value,
     ))
 
-    return {
+    result: dict = {
         "route": chosen.value,
         "endpoint_url": endpoint_url,
         "reason": reason,
         "cost_receipt": receipt,
         "signed_cost_receipt": signed_receipt,
     }
+    if inference_result is not None:
+        result["inference"] = inference_result
+    return result
 
 
 def _receipt_uuid() -> str:
@@ -500,6 +576,7 @@ def _provider_name(option: RoutingOption) -> str:
         RoutingOption.API_GPT5_MINI: "openai",
         RoutingOption.LOCAL_SPECIALIST: "local",
         RoutingOption.LOCAL_GENERALIST: "local",
+        RoutingOption.OLLAMA_LOCAL: "ollama",
     }.get(option, "unknown")
 
 
@@ -533,6 +610,18 @@ def _is_viable(
     if option == RoutingOption.LOCAL_GENERALIST:
         return True, "local generalist always available"
 
+    if option == RoutingOption.OLLAMA_LOCAL:
+        # Perform a live GET to /api/tags to verify Ollama is actually running.
+        try:
+            req = urllib.request.Request(
+                f"{_OLLAMA_DEFAULT_URL}/api/tags", method="GET"
+            )
+            with urllib.request.urlopen(req, timeout=2.0):
+                pass
+            return True, "ollama running"
+        except (urllib.error.URLError, OSError):
+            return False, "ollama not reachable"
+
     if option in _EXTERNAL_API_OPTIONS:
         if not policy.allows_external_api():
             return False, (
@@ -560,11 +649,17 @@ def _api_endpoint(option: RoutingOption) -> str:
         RoutingOption.API_SONNET: "https://api.anthropic.com/v1/messages",
         RoutingOption.API_DEEPSEEK: "https://api.deepseek.com/v1/chat/completions",
         RoutingOption.API_GPT5_MINI: "https://api.openai.com/v1/chat/completions",
+        RoutingOption.OLLAMA_LOCAL: f"{_OLLAMA_DEFAULT_URL}/v1/chat/completions",
     }
     return _endpoints.get(option, "")
 
 
-def _build_receipt(task: str, option: RoutingOption, input_text: str) -> CostReceipt:
+def _build_receipt(
+    task: str,
+    option: RoutingOption,
+    input_text: str,
+    latency_ms: float = 0.0,
+) -> CostReceipt:
     """Build a stub CostReceipt for the dispatched route."""
     token_estimate = max(1, len(input_text.split()))
     cost_per_1k = _API_COST_PER_1K.get(option, 0.0)
@@ -576,7 +671,7 @@ def _build_receipt(task: str, option: RoutingOption, input_text: str) -> CostRec
         tokens_in=token_estimate,
         tokens_out=0,
         cost_usd=round(cost_usd, 8),
-        latency_ms=0.0,
+        latency_ms=latency_ms,
         local_displaced_estimate_usd=round(
             (token_estimate / 1000.0) * _API_COST_PER_1K.get(RoutingOption.API_HAIKU, 0.0),
             8,

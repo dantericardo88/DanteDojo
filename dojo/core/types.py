@@ -49,11 +49,13 @@ class PrecisionType(str, Enum):
 
 
 class TrainingBackend(str, Enum):
-    UNSLOTH = "unsloth"    # Single-GPU, Ada/Ampere, speed champion
-    AXOLOTL = "axolotl"    # Multi-GPU, config-driven, FSDP2
-    MLX = "mlx"            # Apple Silicon
-    NATIVE = "native"      # HF Transformers directly (H100 / custom)
-    FSDP2 = "fsdp2"        # Constitutional multi-GPU FSDP2 engine
+    UNSLOTH = "unsloth"          # Single-GPU Linux/WSL2, speed champion (triton required)
+    AXOLOTL = "axolotl"          # Multi-GPU, config-driven, FSDP2
+    MLX = "mlx"                  # Apple Silicon (macOS only)
+    NATIVE = "native"            # DanteDojo native_rl (zero external deps, any platform)
+    FSDP2 = "fsdp2"              # Constitutional multi-GPU FSDP2 engine
+    TRL = "trl"                  # HF TRL + peft (Windows-native, Linux, macOS)
+    WSL_UNSLOTH = "wsl_unsloth"  # Delegate to WSL2 subprocess for unsloth on Windows
 
 
 class Backend(str, Enum):
@@ -81,6 +83,7 @@ class PrivacyTier(str, Enum):
 class RoutingOption(str, Enum):
     LOCAL_SPECIALIST = "local_specialist"
     LOCAL_GENERALIST = "local_generalist"
+    OLLAMA_LOCAL = "ollama_local"
     API_HAIKU = "api_haiku"
     API_SONNET = "api_sonnet"
     API_DEEPSEEK = "api_deepseek"
