@@ -1,0 +1,1756 @@
+{
+  "d01": {
+    "dim_id": "d01",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d02": {
+    "dim_id": "d02",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d03": {
+    "dim_id": "d03",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d04": {
+    "dim_id": "d04",
+    "callsite": "dojo.core.evidence_coverage",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "8 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "no parallel implementation declared (skip)"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['harness.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d05": {
+    "dim_id": "d05",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d06": {
+    "dim_id": "d06",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d07": {
+    "dim_id": "d07",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d08": {
+    "dim_id": "d08",
+    "callsite": "dojo.core.revocation_strict",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "3 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['gate.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d09": {
+    "dim_id": "d09",
+    "callsite": "dojo.hal.sm_detect",
+    "parallel": "dojo.hal.nvidia",
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "2 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "5 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "primary=2 >= parallel=1"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "2 importer(s) modified in last 30d: ['nf4.py', 'finetune.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d10": {
+    "dim_id": "d10",
+    "callsite": "dojo.train.finetune",
+    "parallel": null,
+    "score_before": 4.0,
+    "score_after": 4.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "3 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d11": {
+    "dim_id": "d11",
+    "callsite": "dojo.train.finetune",
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "3 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d12": {
+    "dim_id": "d12",
+    "callsite": "dojo.quant.fp4",
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "6 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['nf4.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d13": {
+    "dim_id": "d13",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d14": {
+    "dim_id": "d14",
+    "callsite": "dojo.train.fsdp2",
+    "parallel": null,
+    "score_before": 7.0,
+    "score_after": 7.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "6 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d15": {
+    "dim_id": "d15",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d16": {
+    "dim_id": "d16",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d17": {
+    "dim_id": "d17",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d18": {
+    "dim_id": "d18",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d19": {
+    "dim_id": "d19",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d20": {
+    "dim_id": "d20",
+    "callsite": "dojo.idle.prompt_loader",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "5 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['daemon.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d21": {
+    "dim_id": "d21",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d22": {
+    "dim_id": "d22",
+    "callsite": "dojo.quant.gptq_emulation",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "5 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['gptq.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d23": {
+    "dim_id": "d23",
+    "callsite": "dojo.quant.awq_emulation",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "7 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['awq.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d24": {
+    "dim_id": "d24",
+    "callsite": "dojo.quant.gguf_validator",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "6 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['gguf.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d25": {
+    "dim_id": "d25",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d26": {
+    "dim_id": "d26",
+    "callsite": "dojo.stream.inference_loop",
+    "parallel": null,
+    "score_before": 6.0,
+    "score_after": 6.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "5 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d27": {
+    "dim_id": "d27",
+    "callsite": "dojo.stream.kv_streamed_inference",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "5 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['inference_loop.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d28": {
+    "dim_id": "d28",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d29": {
+    "dim_id": "d29",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 7.0,
+    "score_after": 7.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d30": {
+    "dim_id": "d30",
+    "callsite": "dojo.serve.llamacpp_backend",
+    "parallel": null,
+    "score_before": 7.0,
+    "score_after": 7.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "2 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d31": {
+    "dim_id": "d31",
+    "callsite": "dojo.serve.vllm_backend",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "2 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d32": {
+    "dim_id": "d32",
+    "callsite": "dojo.route.router",
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "9 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d33": {
+    "dim_id": "d33",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d34": {
+    "dim_id": "d34",
+    "callsite": "dojo.route.specialist_registry",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "6 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['router.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d35": {
+    "dim_id": "d35",
+    "callsite": "dojo.route.cost_receipts",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "13 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['router.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d36": {
+    "dim_id": "d36",
+    "callsite": "dojo.route.router",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "9 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d37": {
+    "dim_id": "d37",
+    "callsite": "dojo.eval.lm_eval_receipt",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "9 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['harness.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d38": {
+    "dim_id": "d38",
+    "callsite": "dojo.eval.contamination_strict",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "6 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['harness.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d39": {
+    "dim_id": "d39",
+    "callsite": "dojo.eval.multi_judge_gate",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "7 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['harness.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d40": {
+    "dim_id": "d40",
+    "callsite": "dojo.eval.receipt_signer",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "2 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "5 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "2 importer(s) modified in last 30d: ['lm_eval_receipt.py', 'cost_receipts.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d41": {
+    "dim_id": "d41",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d42": {
+    "dim_id": "d42",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d43": {
+    "dim_id": "d43",
+    "callsite": "dojo.experiment.tracker",
+    "parallel": null,
+    "score_before": 7.0,
+    "score_after": 7.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "7 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: entry-point-by-design"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d44": {
+    "dim_id": "d44",
+    "callsite": "dojo.experiment.leaderboard_advanced",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "7 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['leaderboard.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d45": {
+    "dim_id": "d45",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d46": {
+    "dim_id": "d46",
+    "callsite": "dojo.train.axolotl_schema",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "5 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['axolotl_bridge.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d47": {
+    "dim_id": "d47",
+    "callsite": "dojo.serve.backend_cascade",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "8 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['launcher.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d48": {
+    "dim_id": "d48",
+    "callsite": "dojo.train.recipe_diff",
+    "parallel": null,
+    "score_before": 9.0,
+    "score_after": 9.0,
+    "capping_checks": [],
+    "skipped": false,
+    "skip_reason": "",
+    "checks": [
+      {
+        "name": "orphan-audit",
+        "passed": true,
+        "cap": null,
+        "reason": "1 production importer(s)"
+      },
+      {
+        "name": "hardcoded-fallback",
+        "passed": true,
+        "cap": null,
+        "reason": "no hardcoded literal-lists"
+      },
+      {
+        "name": "import-resolves",
+        "passed": true,
+        "cap": null,
+        "reason": "no silent ImportError swallow"
+      },
+      {
+        "name": "functional-diff",
+        "passed": true,
+        "cap": null,
+        "reason": "11 candidate callables (deferred to capability_test)"
+      },
+      {
+        "name": "primary-not-parallel",
+        "passed": true,
+        "cap": null,
+        "reason": "exempt: helper-by-design"
+      },
+      {
+        "name": "recency-check",
+        "passed": true,
+        "cap": null,
+        "reason": "1 importer(s) modified in last 30d: ['recipe_export.py']"
+      },
+      {
+        "name": "claim-auditor",
+        "passed": true,
+        "cap": null,
+        "reason": "no suspicious numeric claims"
+      }
+    ]
+  },
+  "d49": {
+    "dim_id": "d49",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 8.0,
+    "score_after": 8.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  },
+  "d50": {
+    "dim_id": "d50",
+    "callsite": null,
+    "parallel": null,
+    "score_before": 2.0,
+    "score_after": 2.0,
+    "capping_checks": [],
+    "skipped": true,
+    "skip_reason": "no callsite declared",
+    "checks": []
+  }
+}

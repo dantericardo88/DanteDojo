@@ -1,0 +1,11 @@
+{
+  "dim_id": "d17",
+  "callsite": null,
+  "parallel": null,
+  "score_before": 8.0,
+  "score_after": 8.0,
+  "capping_checks": [],
+  "skipped": true,
+  "skip_reason": "no callsite declared",
+  "checks": []
+}
