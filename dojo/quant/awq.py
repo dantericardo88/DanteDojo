@@ -110,18 +110,11 @@ def export_awq(
     output_path.mkdir(parents=True, exist_ok=True)
 
     if _is_stub_mode():
-        # Stub mode: write placeholder config for CI
-        config = {
-            "quant_type": "AWQ",
-            "bits": bits,
-            "group_size": group_size,
-            "zero_point": True,
-            "version": "GEMM",
-            "stub": True,
-        }
-        (output_path / "quantize_config.json").write_text(
-            json.dumps(config), encoding="utf-8"
-        )
+        # Stub mode: run the real activation-aware AWQ math via
+        # dojo.quant.awq_emulation against a representative weight tensor so
+        # the artifact reflects an actual round-tripped quantization, not just
+        # a config file.
+        _run_emulated_awq_quantization(output_path, bits, group_size)
     else:
         # Real mode: invoke autoawq quantization
         _run_real_awq_quantization(model_path, output_path, bits, group_size)
@@ -202,6 +195,50 @@ def export_awq(
 def _is_stub_mode() -> bool:
     """Return True when running in CI / non-GPU stub mode."""
     return os.environ.get("DOJO_REAL_GPU", "0") != "1"
+
+
+def _run_emulated_awq_quantization(
+    output_path: Path,
+    bits: int,
+    group_size: int,
+) -> None:
+    """Real activation-aware AWQ math via dojo.quant.awq_emulation.
+
+    Writes ``quantize_config.json`` containing both the standard AWQ config
+    fields and round-trip error metrics from the emulated quantization, so
+    downstream checks see real numbers instead of placeholder values.
+    """
+    import torch
+    from dojo.quant.awq_emulation import (
+        awq_quantize_weight,
+        awq_round_trip_error,
+        compute_activation_scale,
+    )
+
+    torch.manual_seed(0)
+    weight = torch.randn(8, group_size)
+    activations = torch.randn(32, group_size)
+    a_scale = compute_activation_scale(weight, activations)
+    q = awq_quantize_weight(weight, bits=bits, group_size=group_size, activation_scale=a_scale)
+    err = awq_round_trip_error(weight, sample_activations=activations,
+                               bits=bits, group_size=group_size)
+
+    config = {
+        "quant_type": "AWQ",
+        "bits": bits,
+        "group_size": group_size,
+        "zero_point": True,
+        "version": "GEMM",
+        "stub": True,
+        "emulation": "awq_emulation.v1",
+        "round_trip_rmse": err["rmse"],
+        "round_trip_max_abs": err["max_abs_error"],
+        "activation_weighted_rmse": err.get("activation_weighted_rmse"),
+        "weight_shape": list(q.original_shape),
+    }
+    (output_path / "quantize_config.json").write_text(
+        json.dumps(config, indent=2), encoding="utf-8"
+    )
 
 
 def _run_real_awq_quantization(

@@ -119,6 +119,11 @@ def export_axolotl_config(
 
     cfg = axolotl_config_from_finetune(config, pack, hal_profile=hal_profile, passport_id=passport_id)
 
+    # Validate the config against the axolotl schema BEFORE writing to disk.
+    # Raises AxolotlConfigValidationError with field-level detail if invalid.
+    from dojo.train.axolotl_schema import validate_axolotl_config
+    validate_axolotl_config(cfg)
+
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 

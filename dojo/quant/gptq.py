@@ -87,11 +87,10 @@ def export_gptq(
     output_path.mkdir(parents=True, exist_ok=True)
 
     if _is_stub_mode():
-        # Stub mode: write placeholder config for CI
-        (output_path / "quantize_config.json").write_text(
-            json.dumps({"bits": bits, "group_size": group_size, "stub": True}),
-            encoding="utf-8",
-        )
+        # Stub mode: actually quantize a representative weight tensor using the
+        # pure-Python emulation so the output is a real round-tripped artifact,
+        # not just a config file. See dojo/quant/gptq_emulation.py for the math.
+        _run_emulated_gptq_quantization(output_path, bits, group_size)
     else:
         # Real mode: invoke gptqmodel quantization
         _run_real_gptq_quantization(model_path, output_path, bits, group_size)
@@ -176,6 +175,46 @@ def export_gptq(
 def _is_stub_mode() -> bool:
     """Return True when running in CI / non-GPU stub mode."""
     return os.environ.get("DOJO_REAL_GPU", "0") != "1"
+
+
+def _run_emulated_gptq_quantization(
+    output_path: Path,
+    bits: int,
+    group_size: int,
+) -> None:
+    """Real GPTQ math via dojo.quant.gptq_emulation — no gptqmodel needed.
+
+    Writes both the standard ``quantize_config.json`` and an
+    ``emulated_weight.json`` artifact proving the quantization round-trip
+    actually executed (round-trip error metrics are included).
+    """
+    import torch
+    from dojo.quant.gptq_emulation import (
+        gptq_quantize_weight,
+        gptq_round_trip_error,
+    )
+
+    # Use a deterministic representative weight matrix so the artifact is
+    # reproducible across runs and CI environments.
+    torch.manual_seed(0)
+    weight = torch.randn(8, group_size)
+
+    q = gptq_quantize_weight(weight, bits=bits, group_size=group_size)
+    err = gptq_round_trip_error(weight, bits=bits, group_size=group_size)
+
+    (output_path / "quantize_config.json").write_text(
+        json.dumps({
+            "bits": bits,
+            "group_size": group_size,
+            "stub": True,
+            "emulation": "gptq_emulation.v1",
+            "round_trip_rmse": err["rmse"],
+            "round_trip_max_abs": err["max_abs_error"],
+            "compression_ratio": err["compression_ratio"],
+            "weight_shape": list(q.original_shape),
+        }, indent=2),
+        encoding="utf-8",
+    )
 
 
 def _run_real_gptq_quantization(

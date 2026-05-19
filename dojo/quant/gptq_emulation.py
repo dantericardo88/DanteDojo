@@ -16,7 +16,7 @@ from typing import Tuple
 
 import torch
 
-from dojo.core.evidence import EvidenceLogger, EvidenceType
+from dojo.core.evidence import EvidenceLogger
 from dojo.core.exceptions import QuantizationError
 
 
@@ -98,7 +98,7 @@ def gptq_quantize_weight(
 
     EvidenceLogger.get_instance().emit(
         {
-            "type": EvidenceType.QUANTIZATION_COMPLETE.value,
+            "type": "quant.emulation_step",
             "data": {
                 "operation": "gptq_quantize",
                 "bits": bits,

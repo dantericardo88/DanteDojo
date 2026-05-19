@@ -395,6 +395,22 @@ def run_eval(
         metric_keys=all_metric_keys,
     )
 
+    # HMAC-sign the receipt so downstream consumers can verify integrity
+    # without trusting the file system. See dojo/eval/lm_eval_receipt.py.
+    from dojo.eval.lm_eval_receipt import (
+        build_lm_eval_receipt,
+        sign_lm_eval_receipt,
+    )
+    primary_metric_key = next(iter(all_metric_keys.values()), "acc,none") if all_metric_keys else "acc,none"
+    signed = sign_lm_eval_receipt(build_lm_eval_receipt(
+        model_artifact_id=model.artifact_id,
+        tasks=effective_suite.tasks,
+        mean_scores=mean_scores,
+        merkle_hash=merkle_hash,
+        primary_metric_key=primary_metric_key,
+        evaluated_at=evaluated_at,
+    ))
+
     logger.emit(
         {
             "type": EvidenceType.EVAL_COMPLETE.value,
@@ -406,6 +422,8 @@ def run_eval(
                 "contamination_check_passed": contamination_passed,
                 "source": source,
                 "evaluated_at": evaluated_at,
+                "signature": signed["signature"],
+                "signature_version": signed["signature_version"],
             },
         },
         organ="eval",

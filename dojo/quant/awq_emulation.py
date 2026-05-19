@@ -16,7 +16,7 @@ from typing import Optional, Tuple
 
 import torch
 
-from dojo.core.evidence import EvidenceLogger, EvidenceType
+from dojo.core.evidence import EvidenceLogger
 from dojo.core.exceptions import QuantizationError
 
 
@@ -130,7 +130,7 @@ def awq_quantize_weight(
 
     EvidenceLogger.get_instance().emit(
         {
-            "type": EvidenceType.QUANTIZATION_COMPLETE.value,
+            "type": "quant.emulation_step",
             "data": {
                 "operation": "awq_quantize",
                 "bits": bits,
