@@ -14,6 +14,7 @@ from dojo.experiment.metrics import compare_runs
 
 if TYPE_CHECKING:
     from dojo.experiment.tracker import ExperimentTracker
+    from dojo.experiment.leaderboard_advanced import MetricSpec
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +153,43 @@ class RunLeaderboard:
         if not ranked:
             return None
         return ranked[0]
+
+    def pareto(self, metrics: List["MetricSpec"]) -> List[Dict[str, Any]]:
+        """Return the multi-metric Pareto frontier across this leaderboard.
+
+        Delegates to ``dojo.experiment.leaderboard_advanced.pareto_frontier``.
+        Each entry's metrics dict is flattened into the run dict so callers
+        can use any metric key.
+        """
+        from dojo.experiment.leaderboard_advanced import pareto_frontier
+        runs: List[Dict[str, Any]] = []
+        for e in self.rank():
+            run: Dict[str, Any] = {
+                "run_id": e.run_id,
+                "run_name": e.run_name,
+                "experiment_name": e.experiment_name,
+            }
+            run.update(e.metrics)
+            runs.append(run)
+        return pareto_frontier(runs, metrics)
+
+    def weighted_rank(
+        self,
+        metrics: List["MetricSpec"],
+        limit: Optional[int] = None,
+    ) -> List[Dict[str, Any]]:
+        """Multi-metric weighted ranking — delegates to leaderboard_advanced.rank_weighted."""
+        from dojo.experiment.leaderboard_advanced import rank_weighted
+        runs: List[Dict[str, Any]] = []
+        for e in self.rank():
+            run: Dict[str, Any] = {
+                "run_id": e.run_id,
+                "run_name": e.run_name,
+                "experiment_name": e.experiment_name,
+            }
+            run.update(e.metrics)
+            runs.append(run)
+        return rank_weighted(runs, metrics, limit=limit)
 
     def to_dict(self) -> Dict[str, Any]:
         """Serialize the leaderboard to a dict for JSON export."""

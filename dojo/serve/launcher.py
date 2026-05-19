@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import FrozenSet, Optional
+from typing import Any, Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import ServerStartError
@@ -291,4 +291,39 @@ def stop_serving() -> None:
     )
 
 
-__all__ = ["LaunchFSM", "LaunchState", "launch_server", "stop_serving"]
+# ---------------------------------------------------------------------------
+# Multi-backend cascade serving (d47)
+# ---------------------------------------------------------------------------
+
+from dojo.serve.backend_cascade import BackendCascade, BackendCascadeExhausted
+
+
+def serve_with_cascade(
+    backends: list[tuple[str, Any]],
+    prompt: str,
+    **kwargs: Any,
+) -> dict:
+    """Generate a completion by trying ``backends`` in order until one succeeds.
+
+    ``backends`` is a list of (name, generate_callable) tuples.  Each callable
+    must accept (prompt, **kwargs) and either return a dict or raise.  Errors
+    are caught and the next backend is tried.
+
+    Emits ``serve.cascade_attempt`` per backend and ``serve.cascade_complete``
+    when finished (success or exhausted).
+
+    Raises:
+        BackendCascadeExhausted: when every backend failed.
+    """
+    cascade = BackendCascade(backends=list(backends))
+    return cascade.generate(prompt, **kwargs)
+
+
+__all__ = [
+    "LaunchFSM",
+    "LaunchState",
+    "launch_server",
+    "stop_serving",
+    "serve_with_cascade",
+    "BackendCascadeExhausted",
+]

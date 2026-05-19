@@ -27,6 +27,57 @@ from dojo.core.types import (
     RoutingPolicy,
 )
 
+from dojo.route.specialist_registry import SpecialistRegistry
+
+# Module-level specialist registry. When set via configure_specialist_registry(),
+# _is_viable consults it for capability-aware filtering of LOCAL_SPECIALIST routes.
+_active_specialist_registry: Optional[SpecialistRegistry] = None
+
+
+def configure_specialist_registry(registry: Optional[SpecialistRegistry]) -> None:
+    """Install or clear the active SpecialistRegistry used during dispatch."""
+    global _active_specialist_registry
+    _active_specialist_registry = registry
+
+
+def get_active_specialist_registry() -> Optional[SpecialistRegistry]:
+    return _active_specialist_registry
+
+
+# Module-level HealthMonitor. start_health_monitor() lazily creates one and
+# starts the background probe loop; stop_health_monitor() shuts it down.
+# Wired through here so production code (or app startup) only needs to call
+# one function instead of constructing the class directly.
+_active_health_monitor: Optional["HealthMonitor"] = None  # noqa: F821 forward
+
+
+def start_health_monitor(
+    interval_seconds: float = 30.0,
+    probe_timeout_seconds: float = 3.0,
+) -> "HealthMonitor":  # noqa: F821
+    """Start the singleton HealthMonitor if not already running."""
+    global _active_health_monitor
+    if _active_health_monitor is None:
+        _active_health_monitor = HealthMonitor(
+            interval_seconds=interval_seconds,
+            probe_timeout_seconds=probe_timeout_seconds,
+        )
+        _active_health_monitor.start()
+    return _active_health_monitor
+
+
+def stop_health_monitor() -> None:
+    """Stop the singleton HealthMonitor and clear it."""
+    global _active_health_monitor
+    if _active_health_monitor is not None:
+        _active_health_monitor.stop()
+        _active_health_monitor = None
+
+
+def get_active_health_monitor() -> Optional["HealthMonitor"]:  # noqa: F821
+    return _active_health_monitor
+
+
 # Providers marked as dead — populated by tests or a health monitor.
 # Any RoutingOption.value string placed here will be treated as unavailable.
 _DEAD_PROVIDERS: set[str] = set()
@@ -449,6 +500,15 @@ def _is_viable(
     """Check if a routing option is viable; return (viable, reason)."""
     if option == RoutingOption.LOCAL_SPECIALIST:
         if specialists:
+            # If a SpecialistRegistry is installed, also require capability
+            # match for the policy's task_type (defaults to "general").
+            registry = _active_specialist_registry
+            if registry is not None:
+                task_type = getattr(policy, "task_type", "general") or "general"
+                if not registry.can_handle(task_type):
+                    return False, (
+                        f"no registered specialist supports task_type={task_type!r}"
+                    )
             return True, f"local specialist available: {next(iter(specialists))}"
         return False, "no local specialist deployed"
 
