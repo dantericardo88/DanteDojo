@@ -557,7 +557,7 @@ def _run_real_fp8(
 
     try:
         from torchao.float8 import convert_to_float8_training  # type: ignore[import]
-        from transformers import AutoModelForCausalLM, AutoTokenizer, TrainingArguments
+        from transformers import AutoModelForCausalLM, AutoTokenizer
         from trl import SFTTrainer, SFTConfig
         import datasets as ds
         import torch
@@ -571,8 +571,14 @@ def _run_real_fp8(
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        # Convert Linear layers to Float8Linear (torchao FP8 kernel dispatch)
-        fp8_model = convert_to_float8_training(model)
+        # Convert Linear layers to Float8Linear (torchao FP8 kernel dispatch).
+        # Exclude lm_head: vocab_size is often not divisible by 16 (e.g. GPT-2
+        # uses 50257) which causes torch._scaled_mm to raise RuntimeError.
+        # All internal attention/MLP layers use d_model dims (divisible by 16).
+        def _fp8_filter(mod: object, fqn: str) -> bool:
+            return "lm_head" not in fqn
+
+        fp8_model = convert_to_float8_training(model, module_filter_fn=_fp8_filter)
 
         num_linear = sum(
             1 for m in fp8_model.modules()
@@ -609,7 +615,7 @@ def _run_real_fp8(
             gradient_accumulation_steps=config.grad_accum_steps,
             learning_rate=config.learning_rate,
             bf16=True,
-            max_seq_length=config.max_seq_length,
+            max_length=config.max_seq_length,
             logging_steps=1,
             save_steps=config.grad_accum_steps * config.num_epochs,
             dataset_text_field="text",
@@ -623,7 +629,7 @@ def _run_real_fp8(
         )
         result = trainer.train()
 
-        ckpt_mgr.save(fp8_model, tokenizer, step=result.global_step)
+        ckpt_mgr.save(result.global_step, {"loss": result.training_loss, "backend": "torchao_fp8"})
         return result.global_step, result.training_loss
 
     except ImportError:

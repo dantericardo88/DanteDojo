@@ -260,12 +260,15 @@ def _run_real_awq_quantization(
     Only called when DOJO_REAL_GPU=1 and autoawq is installed.
     """
     import transformers.modeling_utils as _tm
-    # Compatibility shim: autoawq 0.2.5 calls transformers.shard_checkpoint
-    # which was removed in transformers 5.x. Restore a minimal version.
+    # transformers 5.x compatibility shims for autoawq 0.2.5:
+    #
+    # 1. shard_checkpoint removed — restore minimal version.
     if not hasattr(_tm, "shard_checkpoint"):
         def shard_checkpoint(state_dict, max_shard_size="10GB", weights_name="pytorch_model.bin"):
             return {weights_name: state_dict}, {}
         _tm.shard_checkpoint = shard_checkpoint
+    # 2. Decoder layers now return a plain Tensor in transformers 5.x (not tuple).
+    #    awq/quantize/quantizer.py line 538 patched: isinstance check before [0].
     from awq import AutoAWQForCausalLM  # type: ignore[import]
     from transformers import AutoTokenizer  # type: ignore[import]
 
@@ -276,12 +279,75 @@ def _run_real_awq_quantization(
         "version": "GEMM",
     }
 
-    model = AutoAWQForCausalLM.from_pretrained(str(model_path))
+    model = AutoAWQForCausalLM.from_pretrained(
+        str(model_path), device_map="cuda:0", torch_dtype="float16"
+    )
     tokenizer = AutoTokenizer.from_pretrained(
         str(model_path), trust_remote_code=True
     )
 
-    model.quantize(tokenizer, quant_config=quant_config)
+    # autoawq's get_calib_dataset concatenates all token IDs then splits into
+    # 512-token blocks (n_split = total_tokens // 512). If total_tokens < 512,
+    # n_split=0 → empty list → torch.cat([]) ValueError. Each paragraph below
+    # is ~200 tokens; 4 paragraphs = ~800 tokens → at least 1 complete block.
+    _CALIB_TEXTS = [
+        (
+            "The transformer architecture has revolutionized natural language processing by introducing "
+            "self-attention mechanisms that allow models to weigh the importance of different tokens "
+            "when encoding a sequence. Unlike recurrent neural networks, transformers process all tokens "
+            "in parallel, making training significantly faster on modern GPU hardware. The attention "
+            "mechanism computes queries, keys, and values from input embeddings, then uses scaled dot-product "
+            "attention to produce context-aware representations. Multi-head attention allows the model to "
+            "attend to information from different representation subspaces simultaneously. Positional "
+            "encodings inject sequence order information since the architecture itself is permutation-invariant. "
+            "Feed-forward layers after each attention block further transform representations. Layer "
+            "normalization and residual connections stabilize training of very deep networks."
+        ),
+        (
+            "Quantization is the process of reducing the numerical precision of a neural network's weights "
+            "and activations to decrease memory usage and increase inference throughput. Common quantization "
+            "formats include INT8, INT4, FP8, and FP4, each offering different trade-offs between compression "
+            "ratio and accuracy. Post-training quantization applies after training without requiring re-training, "
+            "while quantization-aware training simulates quantization during the forward pass so the model "
+            "can adapt. Activation-aware weight quantization scales weight quantization based on the magnitude "
+            "of corresponding activations, preserving channels that contribute most to the output. Group "
+            "quantization applies separate scale factors to small groups of weights, reducing quantization "
+            "error at the cost of slightly higher memory overhead. Calibration datasets provide representative "
+            "inputs to measure activation statistics before quantizing."
+        ),
+        (
+            "Large language models are autoregressive neural networks trained to predict the next token "
+            "given all previous tokens in a sequence. They are typically built on the transformer decoder "
+            "architecture with billions of parameters. During pretraining, models consume trillions of tokens "
+            "from diverse internet text, learning grammar, facts, reasoning patterns, and stylistic variation. "
+            "Fine-tuning then adapts the pretrained model to follow instructions or specialize for a domain. "
+            "Reinforcement learning from human feedback further aligns model outputs with human preferences. "
+            "Sampling strategies such as temperature scaling, top-p nucleus sampling, and beam search control "
+            "the diversity and quality of generated text. Key-value caches store intermediate attention "
+            "computations during generation to avoid redundant calculation of previously processed tokens."
+        ),
+        (
+            "GPU acceleration enables the fast matrix multiplications at the core of neural network training "
+            "and inference. Modern GPUs contain thousands of CUDA cores organized into streaming multiprocessors "
+            "that execute floating-point operations in parallel. Tensor cores on NVIDIA Ampere and Hopper "
+            "architectures accelerate mixed-precision matrix multiplication, supporting FP16, BF16, TF32, "
+            "INT8, and FP8 formats. Memory bandwidth is often the bottleneck for large model inference, since "
+            "loading weight matrices from DRAM to registers dominates computation time. Flash attention "
+            "reorders attention computations to minimize memory reads and writes, achieving near-memory-bandwidth-"
+            "optimal attention computation. Quantized inference moves the bottleneck from memory bandwidth "
+            "toward arithmetic throughput, improving utilization of tensor cores. Paged attention virtualizes "
+            "the key-value cache to allow efficient batching of requests with variable sequence lengths."
+        ),
+    ]
+    # autoawq accepts calib_data as list[str]; pass local texts to avoid
+    # downloading a large calibration dataset.
+    try:
+        model.quantize(tokenizer, quant_config=quant_config,
+                       calib_data=_CALIB_TEXTS, max_calib_samples=len(_CALIB_TEXTS),
+                       max_calib_seq_len=512)
+    except TypeError:
+        # Older autoawq versions don't accept max_calib_samples kwarg
+        model.quantize(tokenizer, quant_config=quant_config, calib_data=_CALIB_TEXTS)
     model.save_quantized(str(output_path))
     tokenizer.save_pretrained(str(output_path))
 
