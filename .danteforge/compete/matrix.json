@@ -1,0 +1,472 @@
+{
+  "project": "DanteDojo",
+  "competitors": [],
+  "competitors_closed_source": [],
+  "competitors_oss": [],
+  "lastUpdated": "2026-05-19T21:39:47.119Z",
+  "overallSelfScore": 3.6,
+  "dimensions": [
+    {
+      "id": "functionality",
+      "label": "Core Functionality",
+      "weight": 1.5,
+      "category": "quality",
+      "frequency": "high",
+      "scores": {
+        "self": 0.3
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 2.3,
+      "capability_test": {
+        "command": "python -m main --help 2>&1 | head -3",
+        "description": "Auto-scaffolded capability test for Core Functionality",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "testing",
+      "label": "Test Coverage & Quality",
+      "weight": 1.5,
+      "category": "quality",
+      "frequency": "high",
+      "scores": {
+        "self": 6.5
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 8.5,
+      "capability_test": {
+        "command": "python -m pytest --tb=short 2>&1 | tail -10",
+        "description": "Auto-scaffolded capability test for Test Coverage & Quality",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "error_handling",
+      "label": "Error Handling & Recovery",
+      "weight": 1.2,
+      "category": "quality",
+      "frequency": "high",
+      "scores": {
+        "self": 5
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 7,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/error_handling.sh 2>&1",
+        "description": "Stub capability test for Error Handling & Recovery — edit .danteforge/capability-tests/error_handling.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "security",
+      "label": "Security Hardening",
+      "weight": 1.3,
+      "category": "reliability",
+      "frequency": "high",
+      "scores": {
+        "self": 7
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 9,
+      "capability_test": {
+        "command": "python -m bandit -r src/ 2>&1 | tail -5",
+        "description": "Auto-scaffolded capability test for Security Hardening",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "ux_polish",
+      "label": "UX Polish & Onboarding",
+      "weight": 1.4,
+      "category": "ux",
+      "frequency": "high",
+      "scores": {
+        "self": 5
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 7,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/ux_polish.sh 2>&1",
+        "description": "Stub capability test for UX Polish & Onboarding — edit .danteforge/capability-tests/ux_polish.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "documentation",
+      "label": "Documentation Quality",
+      "weight": 1,
+      "category": "ux",
+      "frequency": "medium",
+      "scores": {
+        "self": 0.6
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 2.6,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/documentation.sh 2>&1",
+        "description": "Stub capability test for Documentation Quality — edit .danteforge/capability-tests/documentation.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "performance",
+      "label": "Performance",
+      "weight": 1.2,
+      "category": "quality",
+      "frequency": "high",
+      "scores": {
+        "self": 7
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 9,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/performance.sh 2>&1",
+        "description": "Stub capability test for Performance — edit .danteforge/capability-tests/performance.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "maintainability",
+      "label": "Code Maintainability",
+      "weight": 1,
+      "category": "reliability",
+      "frequency": "medium",
+      "scores": {
+        "self": 1.2
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 3.2,
+      "capability_test": {
+        "command": "python -m flake8 src/ 2>&1 | tail -5",
+        "description": "Auto-scaffolded capability test for Code Maintainability",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "developer_experience",
+      "label": "Developer Experience",
+      "weight": 1.5,
+      "category": "ux",
+      "frequency": "high",
+      "scores": {
+        "self": 0.9
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 2.9,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/developer_experience.sh 2>&1",
+        "description": "Stub capability test for Developer Experience — edit .danteforge/capability-tests/developer_experience.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "autonomy",
+      "label": "Autonomy & Self-Direction",
+      "weight": 1.3,
+      "category": "features",
+      "frequency": "high",
+      "scores": {
+        "self": 3.7
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 5.7,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/autonomy.sh 2>&1",
+        "description": "Stub capability test for Autonomy & Self-Direction — edit .danteforge/capability-tests/autonomy.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "planning_quality",
+      "label": "Planning Quality (PDSE)",
+      "weight": 1,
+      "category": "features",
+      "frequency": "medium",
+      "scores": {
+        "self": 0.7
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 2.7,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/planning_quality.sh 2>&1",
+        "description": "Stub capability test for Planning Quality (PDSE) — edit .danteforge/capability-tests/planning_quality.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "self_improvement",
+      "label": "Self-Improvement Loop",
+      "weight": 1,
+      "category": "features",
+      "frequency": "medium",
+      "scores": {
+        "self": 4.5
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 6.5,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/self_improvement.sh 2>&1",
+        "description": "Stub capability test for Self-Improvement Loop — edit .danteforge/capability-tests/self_improvement.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "spec_driven_pipeline",
+      "label": "Spec-Driven Pipeline",
+      "weight": 1.2,
+      "category": "features",
+      "frequency": "medium",
+      "scores": {
+        "self": 5.2
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 7.2,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/spec_driven_pipeline.sh 2>&1",
+        "description": "Stub capability test for Spec-Driven Pipeline — edit .danteforge/capability-tests/spec_driven_pipeline.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "convergence_self_healing",
+      "label": "Convergence & Self-Healing",
+      "weight": 1.1,
+      "category": "features",
+      "frequency": "medium",
+      "scores": {
+        "self": 3
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 5,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/convergence_self_healing.sh 2>&1",
+        "description": "Stub capability test for Convergence & Self-Healing — edit .danteforge/capability-tests/convergence_self_healing.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "token_economy",
+      "label": "Token Economy & Budget Control",
+      "weight": 0.9,
+      "category": "features",
+      "frequency": "medium",
+      "scores": {
+        "self": 7.5
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 9.5,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/token_economy.sh 2>&1",
+        "description": "Stub capability test for Token Economy & Budget Control — edit .danteforge/capability-tests/token_economy.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "context_economy",
+      "label": "Context Economy",
+      "weight": 1,
+      "category": "features",
+      "frequency": "medium",
+      "scores": {
+        "self": 0
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 2,
+      "ceiling": 9,
+      "ceilingReason": "PRD-26 filter pipeline shipped — ceiling raised to 9.0; final point requires live telemetry from real command runs",
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/context_economy.sh 2>&1",
+        "description": "Stub capability test for Context Economy — edit .danteforge/capability-tests/context_economy.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "ecosystem_mcp",
+      "label": "Ecosystem & MCP Integration",
+      "weight": 0.8,
+      "category": "features",
+      "frequency": "low",
+      "scores": {
+        "self": 4
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 6,
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/ecosystem_mcp.sh 2>&1",
+        "description": "Stub capability test for Ecosystem & MCP Integration — edit .danteforge/capability-tests/ecosystem_mcp.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "enterprise_readiness",
+      "label": "Enterprise Readiness",
+      "weight": 0.8,
+      "category": "reliability",
+      "frequency": "low",
+      "scores": {
+        "self": 4
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 6,
+      "ceiling": 9,
+      "ceilingReason": "filesystem evidence (SECURITY.md, CHANGELOG.md, RUNBOOK.md) is automatable up to 9.0; the final point requires real production deployments and customer validation",
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/enterprise_readiness.sh 2>&1",
+        "description": "Stub capability test for Enterprise Readiness — edit .danteforge/capability-tests/enterprise_readiness.sh",
+        "timeoutMs": 30000
+      }
+    },
+    {
+      "id": "community_adoption",
+      "label": "Community Adoption",
+      "weight": 0.7,
+      "category": "features",
+      "frequency": "low",
+      "scores": {
+        "self": 1.5
+      },
+      "gap_to_leader": 0,
+      "leader": "unknown",
+      "gap_to_closed_source_leader": 0,
+      "closed_source_leader": "unknown",
+      "gap_to_oss_leader": 0,
+      "oss_leader": "unknown",
+      "status": "not-started",
+      "sprint_history": [],
+      "next_sprint_target": 3.5,
+      "ceiling": 4,
+      "ceilingReason": "requires npm downloads, GitHub stars, and external contributors — cannot be automated",
+      "capability_test": {
+        "command": "bash .danteforge/capability-tests/community_adoption.sh 2>&1",
+        "description": "Stub capability test for Community Adoption — edit .danteforge/capability-tests/community_adoption.sh",
+        "timeoutMs": 30000
+      }
+    }
+  ]
+}

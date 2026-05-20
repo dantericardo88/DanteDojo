@@ -1,0 +1,32 @@
+{
+  "allGreen": false,
+  "target": 9,
+  "passing": 0,
+  "failing": 18,
+  "blocked": 1,
+  "total": 19,
+  "failingDimensions": [
+    "Core Functionality: 0.3",
+    "Test Coverage & Quality: 6.5",
+    "Error Handling & Recovery: 5.0",
+    "Security Hardening: 7.0",
+    "UX Polish & Onboarding: 5.0",
+    "Documentation Quality: 0.6",
+    "Performance: 7.0",
+    "Code Maintainability: 1.2",
+    "Developer Experience: 5.0",
+    "Autonomy & Self-Direction: 4.0",
+    "Planning Quality (PDSE): 4.5",
+    "Self-Improvement Loop: 2.0",
+    "Spec-Driven Pipeline: 3.0",
+    "Convergence & Self-Healing: 1.5",
+    "Token Economy & Budget Control: 2.0",
+    "Context Economy: 0.0",
+    "Ecosystem & MCP Integration: 4.0",
+    "Enterprise Readiness: 4.0"
+  ],
+  "blockedDimensions": [
+    "Community Adoption (ceiling: 4)"
+  ],
+  "checkedAt": "2026-05-20T06:03:39.252Z"
+}

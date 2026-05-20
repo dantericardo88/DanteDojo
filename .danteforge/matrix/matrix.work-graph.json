@@ -1,0 +1,841 @@
+{
+  "generatedAt": "2026-05-20T06:05:34.389Z",
+  "packets": [
+    {
+      "id": "work.functionality.2026-05-20T06-05-34",
+      "title": "Close gap on Core Functionality",
+      "objective": "Move \"Core Functionality\" from current score 0.3 toward target 9.",
+      "dimensionId": "functionality",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 0.3 toward 2.3",
+        "Score for functionality moves from 0.3 to at least 9 (gap: 8.7)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "critical",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.testing.2026-05-20T06-05-34",
+      "title": "Close gap on Test Coverage & Quality",
+      "objective": "Move \"Test Coverage & Quality\" from current score 6.5 toward target 9.",
+      "dimensionId": "testing",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 6.5 toward 8.5",
+        "Score for testing moves from 6.5 to at least 9 (gap: 2.5)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": false,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "medium",
+      "estimatedLoc": 200,
+      "estimatedMinutes": 30,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.error_handling.2026-05-20T06-05-34",
+      "title": "Close gap on Error Handling & Recovery",
+      "objective": "Move \"Error Handling & Recovery\" from current score 5 toward target 9.",
+      "dimensionId": "error_handling",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 5 toward 7",
+        "Score for error_handling moves from 5 to at least 9 (gap: 4.0)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "high",
+      "estimatedLoc": 200,
+      "estimatedMinutes": 30,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.security.2026-05-20T06-05-34",
+      "title": "Close gap on Security Hardening",
+      "objective": "Move \"Security Hardening\" from current score 7 toward target 9.",
+      "dimensionId": "security",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 7 toward 9",
+        "Score for security moves from 7 to at least 9 (gap: 2.0)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": false,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "medium",
+      "estimatedLoc": 200,
+      "estimatedMinutes": 30,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.ux_polish.2026-05-20T06-05-34",
+      "title": "Close gap on UX Polish & Onboarding",
+      "objective": "Move \"UX Polish & Onboarding\" from current score 5 toward target 9.",
+      "dimensionId": "ux_polish",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 5 toward 7",
+        "Score for ux_polish moves from 5 to at least 9 (gap: 4.0)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "high",
+      "estimatedLoc": 200,
+      "estimatedMinutes": 30,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.documentation.2026-05-20T06-05-34",
+      "title": "Close gap on Documentation Quality",
+      "objective": "Move \"Documentation Quality\" from current score 0.6 toward target 9.",
+      "dimensionId": "documentation",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 0.6 toward 2.6",
+        "Score for documentation moves from 0.6 to at least 9 (gap: 8.4)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "critical",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.performance.2026-05-20T06-05-34",
+      "title": "Close gap on Performance",
+      "objective": "Move \"Performance\" from current score 7 toward target 9.",
+      "dimensionId": "performance",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 7 toward 9",
+        "Score for performance moves from 7 to at least 9 (gap: 2.0)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": false,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "medium",
+      "estimatedLoc": 200,
+      "estimatedMinutes": 30,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.maintainability.2026-05-20T06-05-34",
+      "title": "Close gap on Code Maintainability",
+      "objective": "Move \"Code Maintainability\" from current score 1.2 toward target 9.",
+      "dimensionId": "maintainability",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 1.2 toward 3.2",
+        "Score for maintainability moves from 1.2 to at least 9 (gap: 7.8)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "critical",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.developer_experience.2026-05-20T06-05-34",
+      "title": "Close gap on Developer Experience",
+      "objective": "Move \"Developer Experience\" from current score 0.9 toward target 9.",
+      "dimensionId": "developer_experience",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 0.9 toward 2.9",
+        "Score for developer_experience moves from 0.9 to at least 9 (gap: 8.1)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "critical",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.autonomy.2026-05-20T06-05-34",
+      "title": "Close gap on Autonomy & Self-Direction",
+      "objective": "Move \"Autonomy & Self-Direction\" from current score 3.7 toward target 9.",
+      "dimensionId": "autonomy",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 3.7 toward 5.7",
+        "Score for autonomy moves from 3.7 to at least 9 (gap: 5.3)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "critical",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.planning_quality.2026-05-20T06-05-34",
+      "title": "Close gap on Planning Quality (PDSE)",
+      "objective": "Move \"Planning Quality (PDSE)\" from current score 0.7 toward target 9.",
+      "dimensionId": "planning_quality",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 0.7 toward 2.7",
+        "Score for planning_quality moves from 0.7 to at least 9 (gap: 8.3)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "critical",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.self_improvement.2026-05-20T06-05-34",
+      "title": "Close gap on Self-Improvement Loop",
+      "objective": "Move \"Self-Improvement Loop\" from current score 4.5 toward target 9.",
+      "dimensionId": "self_improvement",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 4.5 toward 6.5",
+        "Score for self_improvement moves from 4.5 to at least 9 (gap: 4.5)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "high",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.spec_driven_pipeline.2026-05-20T06-05-34",
+      "title": "Close gap on Spec-Driven Pipeline",
+      "objective": "Move \"Spec-Driven Pipeline\" from current score 5.2 toward target 9.",
+      "dimensionId": "spec_driven_pipeline",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 5.2 toward 7.2",
+        "Score for spec_driven_pipeline moves from 5.2 to at least 9 (gap: 3.8)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "high",
+      "estimatedLoc": 200,
+      "estimatedMinutes": 30,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.convergence_self_healing.2026-05-20T06-05-34",
+      "title": "Close gap on Convergence & Self-Healing",
+      "objective": "Move \"Convergence & Self-Healing\" from current score 3 toward target 9.",
+      "dimensionId": "convergence_self_healing",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 3 toward 5",
+        "Score for convergence_self_healing moves from 3 to at least 9 (gap: 6.0)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "critical",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.token_economy.2026-05-20T06-05-34",
+      "title": "Close gap on Token Economy & Budget Control",
+      "objective": "Move \"Token Economy & Budget Control\" from current score 7.5 toward target 9.",
+      "dimensionId": "token_economy",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 7.5 toward 9.5",
+        "Score for token_economy moves from 7.5 to at least 9 (gap: 1.5)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": false,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "medium",
+      "estimatedLoc": 200,
+      "estimatedMinutes": 30,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.context_economy.2026-05-20T06-05-34",
+      "title": "Close gap on Context Economy",
+      "objective": "Move \"Context Economy\" from current score 0 toward target 9.",
+      "dimensionId": "context_economy",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 0 toward 2",
+        "Score for context_economy moves from 0 to at least 9 (gap: 9.0)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "critical",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.ecosystem_mcp.2026-05-20T06-05-34",
+      "title": "Close gap on Ecosystem & MCP Integration",
+      "objective": "Move \"Ecosystem & MCP Integration\" from current score 4 toward target 9.",
+      "dimensionId": "ecosystem_mcp",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 4 toward 6",
+        "Score for ecosystem_mcp moves from 4 to at least 9 (gap: 5.0)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "high",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.enterprise_readiness.2026-05-20T06-05-34",
+      "title": "Close gap on Enterprise Readiness",
+      "objective": "Move \"Enterprise Readiness\" from current score 4 toward target 9.",
+      "dimensionId": "enterprise_readiness",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 4 toward 6",
+        "Score for enterprise_readiness moves from 4 to at least 9 (gap: 5.0)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "high",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    },
+    {
+      "id": "work.community_adoption.2026-05-20T06-05-34",
+      "title": "Close gap on Community Adoption",
+      "objective": "Move \"Community Adoption\" from current score 1.5 toward target 9.",
+      "dimensionId": "community_adoption",
+      "paths": {
+        "ownedPaths": [],
+        "readOnlyPaths": [],
+        "forbiddenPaths": [
+          ".danteforge/compete/matrix.json",
+          ".danteforge/compete/matrix-*.json",
+          ".danteforge/compete/COMPETE_REPORT.md",
+          ".danteforge/scores/**",
+          ".danteforge/score-proposals/**"
+        ]
+      },
+      "dependsOn": [],
+      "mayConflictWith": [],
+      "acceptanceCriteria": [
+        "Implementation passes typecheck and tests",
+        "Score moves from 1.5 toward 3.5",
+        "Score for community_adoption moves from 1.5 to at least 9 (gap: 7.5)"
+      ],
+      "proof": {
+        "proofRequired": [
+          "typecheck exits 0",
+          "tests pass",
+          "no forbidden files changed",
+          "dimension score moves verifiably"
+        ],
+        "requiredCommands": [
+          "npm run typecheck",
+          "npm test"
+        ]
+      },
+      "tasteGateRequired": false,
+      "redTeamRequired": true,
+      "rollbackPlan": "Remove worktree, discard branch, restore from Time Machine snapshot.",
+      "riskLevel": "critical",
+      "estimatedLoc": 400,
+      "estimatedMinutes": 60,
+      "createdAt": "2026-05-20T06:05:34.389Z",
+      "createdBy": "matrix-kernel"
+    }
+  ]
+}

@@ -1,0 +1,104 @@
+{
+    "process": "gptq",
+    "layer": 0,
+    "module": "attn.c_attn",
+    "feat: in, out": "2, 6",
+    "dtype: size": "bf16: 0.0MB",
+    "loss": "0.0000000007",
+    "samples": "8481",
+    "damp": "0.05000",
+    "time": "1.687",
+    "fwd_time": "4.823",
+    "(v)ram": "cuda 0.3G"
+}
+{
+    "process": "gptq",
+    "layer": 0,
+    "module": "attn.c_proj",
+    "feat: in, out": "2, 2",
+    "dtype: size": "bf16: 0.0MB",
+    "loss": "0.0000000000",
+    "samples": "8481",
+    "damp": "0.05000",
+    "time": "0.069",
+    "fwd_time": "3.693",
+    "(v)ram": "cuda 0.31G"
+}
+{
+    "process": "gptq",
+    "layer": 0,
+    "module": "mlp.c_fc",
+    "feat: in, out": "2, 8",
+    "dtype: size": "bf16: 0.0MB",
+    "loss": "0.0000000129",
+    "samples": "8481",
+    "damp": "0.05000",
+    "time": "0.082",
+    "fwd_time": "4.190",
+    "(v)ram": "cuda 0.4G"
+}
+{
+    "process": "gptq",
+    "layer": 0,
+    "module": "mlp.c_proj",
+    "feat: in, out": "8, 2",
+    "dtype: size": "bf16: 0.0MB",
+    "loss": "0.0000000006",
+    "samples": "8481",
+    "damp": "0.05000",
+    "time": "0.101",
+    "fwd_time": "4.651",
+    "(v)ram": "cuda 0.42G"
+}
+{
+    "process": "gptq",
+    "layer": 1,
+    "module": "attn.c_attn",
+    "feat: in, out": "2, 6",
+    "dtype: size": "bf16: 0.0MB",
+    "loss": "0.0000000006",
+    "samples": "8481",
+    "damp": "0.05000",
+    "time": "0.064",
+    "fwd_time": "3.401",
+    "(v)ram": "cuda 0.46G"
+}
+{
+    "process": "gptq",
+    "layer": 1,
+    "module": "attn.c_proj",
+    "feat: in, out": "2, 2",
+    "dtype: size": "bf16: 0.0MB",
+    "loss": "0.0000000000",
+    "samples": "8481",
+    "damp": "0.05000",
+    "time": "0.079",
+    "fwd_time": "3.900",
+    "(v)ram": "cuda 0.46G"
+}
+{
+    "process": "gptq",
+    "layer": 1,
+    "module": "mlp.c_fc",
+    "feat: in, out": "2, 8",
+    "dtype: size": "bf16: 0.0MB",
+    "loss": "0.0000000146",
+    "samples": "8481",
+    "damp": "0.05000",
+    "time": "0.056",
+    "fwd_time": "3.655",
+    "(v)ram": "cuda 0.46G"
+}
+{
+    "process": "gptq",
+    "layer": 1,
+    "module": "mlp.c_proj",
+    "feat: in, out": "8, 2",
+    "dtype: size": "bf16: 0.0MB",
+    "loss": "0.0000000000",
+    "samples": "8481",
+    "damp": "0.05000",
+    "time": "0.128",
+    "fwd_time": "3.800",
+    "(v)ram": "cuda 0.46G"
+}

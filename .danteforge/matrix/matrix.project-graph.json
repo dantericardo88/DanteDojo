@@ -1,0 +1,19 @@
+{
+  "project": {
+    "projectId": "DanteDojo",
+    "rootPath": "C:\\Projects\\DanteDojo",
+    "detectedAt": "2026-05-20T06:04:37.351Z",
+    "buildCommands": [
+      "npm run build"
+    ],
+    "verifyCommands": [
+      "npm run typecheck",
+      "npm test"
+    ],
+    "protectedPaths": [],
+    "ownershipPath": ".danteforge/agent-ownership.json",
+    "evidenceDir": ".danteforge/evidence"
+  },
+  "nodes": [],
+  "generatedAt": "2026-05-20T06:04:37.352Z"
+}
