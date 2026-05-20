@@ -42,27 +42,35 @@ class TestSourceCheck:
 
 class TestCudaAvailable:
     def test_reads_sm_from_torch_when_cuda_available(self):
-        with patch("torch.cuda.is_available", return_value=True):
-            with patch("torch.cuda.get_device_capability", return_value=(8, 9)):
-                sm = _detect_sm_version()
+        with patch("dojo.hal.sm_detect.detect_sm") as mock_detect_sm:
+            mock_detect_sm.return_value.available = False
+            with patch("torch.cuda.is_available", return_value=True):
+                with patch("torch.cuda.get_device_capability", return_value=(8, 9)):
+                    sm = _detect_sm_version()
         assert sm == 8.9
 
     def test_handles_hopper_sm_90(self):
-        with patch("torch.cuda.is_available", return_value=True):
-            with patch("torch.cuda.get_device_capability", return_value=(9, 0)):
-                sm = _detect_sm_version()
+        with patch("dojo.hal.sm_detect.detect_sm") as mock_detect_sm:
+            mock_detect_sm.return_value.available = False
+            with patch("torch.cuda.is_available", return_value=True):
+                with patch("torch.cuda.get_device_capability", return_value=(9, 0)):
+                    sm = _detect_sm_version()
         assert sm == 9.0
 
     def test_handles_ampere_sm_86(self):
-        with patch("torch.cuda.is_available", return_value=True):
-            with patch("torch.cuda.get_device_capability", return_value=(8, 6)):
-                sm = _detect_sm_version()
+        with patch("dojo.hal.sm_detect.detect_sm") as mock_detect_sm:
+            mock_detect_sm.return_value.available = False
+            with patch("torch.cuda.is_available", return_value=True):
+                with patch("torch.cuda.get_device_capability", return_value=(8, 6)):
+                    sm = _detect_sm_version()
         assert sm == 8.6
 
     def test_handles_blackwell_sm_100(self):
-        with patch("torch.cuda.is_available", return_value=True):
-            with patch("torch.cuda.get_device_capability", return_value=(10, 0)):
-                sm = _detect_sm_version()
+        with patch("dojo.hal.sm_detect.detect_sm") as mock_detect_sm:
+            mock_detect_sm.return_value.available = False
+            with patch("torch.cuda.is_available", return_value=True):
+                with patch("torch.cuda.get_device_capability", return_value=(10, 0)):
+                    sm = _detect_sm_version()
         assert sm == 10.0
 
 
@@ -79,14 +87,18 @@ class TestCudaUnavailableFallback:
 
     def test_returns_zero_when_no_cuda_and_no_env_var(self, monkeypatch):
         monkeypatch.delenv("DOJO_MOCK_SM", raising=False)
-        with patch("torch.cuda.is_available", return_value=False):
-            sm = _detect_sm_version()
+        with patch("dojo.hal.sm_detect.detect_sm") as mock_detect_sm:
+            mock_detect_sm.return_value.available = False
+            with patch("torch.cuda.is_available", return_value=False):
+                sm = _detect_sm_version()
         assert sm == 0.0
 
     def test_torch_import_failure_falls_back_gracefully(self, monkeypatch):
         monkeypatch.setenv("DOJO_MOCK_SM", "7.5")
-        with patch("torch.cuda.is_available", side_effect=RuntimeError("driver bug")):
-            sm = _detect_sm_version()
+        with patch("dojo.hal.sm_detect.detect_sm") as mock_detect_sm:
+            mock_detect_sm.return_value.available = False
+            with patch("torch.cuda.is_available", side_effect=RuntimeError("driver bug")):
+                sm = _detect_sm_version()
         assert sm == 7.5
 
 

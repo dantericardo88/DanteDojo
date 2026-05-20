@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import os
 import sys
 from pathlib import Path
 from types import ModuleType
@@ -194,19 +195,20 @@ class TestExportGptqPplRegressionEvidence:
 
 class TestExportGptqMissingGptqmodel:
     def test_export_gptq_missing_gptqmodel(self, tmp_path):
-        """When gptqmodel is absent, raise QuantizationError with pip install hint."""
+        """When gptqmodel is absent in real-GPU mode, raise QuantizationError with pip install hint."""
         # Remove any injected mock so the import actually fails
         sys.modules.pop("gptqmodel", None)
 
         import dojo.quant.gptq as gptq_module
         importlib.reload(gptq_module)
 
-        with patch.dict(sys.modules, {"gptqmodel": None}):
-            with pytest.raises(QuantizationError) as exc_info:
-                gptq_module.export_gptq(
-                    model_path=tmp_path / "model",
-                    output_dir=tmp_path / "out",
-                )
+        with patch.dict(os.environ, {"DOJO_REAL_GPU": "1"}):
+            with patch.dict(sys.modules, {"gptqmodel": None}):
+                with pytest.raises(QuantizationError) as exc_info:
+                    gptq_module.export_gptq(
+                        model_path=tmp_path / "model",
+                        output_dir=tmp_path / "out",
+                    )
 
         msg = str(exc_info.value)
         assert "gptq-model" in msg or "gptqmodel" in msg.lower()

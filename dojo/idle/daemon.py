@@ -234,8 +234,15 @@ def _make_minimal_pack(pack_id: str):  # type: ignore[return]
     )
 
 
-def make_real_gpu_step_runner(config: IdleTrainConfig) -> StepRunner:
-    """Return a step_runner that calls the real finetune() when DOJO_REAL_GPU=1."""
+def make_real_gpu_step_runner(
+    config: IdleTrainConfig,
+    pack=None,
+) -> StepRunner:
+    """Return a step_runner that calls the real finetune() when DOJO_REAL_GPU=1.
+
+    ``pack`` — optional pack with a ``samples`` list for real GPU training.
+    When omitted, ``_make_minimal_pack`` is used (zero samples, stub only).
+    """
 
     def _runner(current_step: int, accumulated: int) -> dict:
         if os.environ.get("DOJO_REAL_GPU", "0") != "1":
@@ -256,8 +263,8 @@ def make_real_gpu_step_runner(config: IdleTrainConfig) -> StepRunner:
             learning_rate=config.learning_rate,
         )
 
-        pack = _make_minimal_pack(config.pack_id)
-        result = finetune(ft_config, hal_profile, pack)
+        _pack = pack if pack is not None else _make_minimal_pack(config.pack_id)
+        result = finetune(ft_config, hal_profile, _pack)
 
         return {
             "current_step": current_step,
