@@ -744,6 +744,8 @@ def finetune(
         elif not real_gpu and backend == TrainingBackend.NATIVE:
             # NATIVE backend (CPU / AMD MI300 / Intel B580) always does real training.
             # _TinyDecoderLM runs on any device — no GPU gate needed.
+            _maybe_run_wandb_sim_callback()
+            _maybe_emit_nf4_config()
             if config.training_mode == "sft":
                 steps_completed, final_loss = _run_native_sft(config, logger, ckpt_mgr)
             else:
@@ -786,7 +788,7 @@ def finetune(
         from dojo.experiment.leaderboard import RunLeaderboard
         _lb = RunLeaderboard(primary_metric="final_loss", higher_is_better=False)
         _lb.add_run(
-            run_id=exp_tracker._active_run_id or "unknown",
+            run_id=getattr(exp_tracker, "_active_run_id", None) or "unknown",
             run_name=run_cfg.run_name,
             experiment_name=run_cfg.experiment_name,
             metrics={
