@@ -259,6 +259,13 @@ def _run_real_awq_quantization(
 
     Only called when DOJO_REAL_GPU=1 and autoawq is installed.
     """
+    import transformers.modeling_utils as _tm
+    # Compatibility shim: autoawq 0.2.5 calls transformers.shard_checkpoint
+    # which was removed in transformers 5.x. Restore a minimal version.
+    if not hasattr(_tm, "shard_checkpoint"):
+        def shard_checkpoint(state_dict, max_shard_size="10GB", weights_name="pytorch_model.bin"):
+            return {weights_name: state_dict}, {}
+        _tm.shard_checkpoint = shard_checkpoint
     from awq import AutoAWQForCausalLM  # type: ignore[import]
     from transformers import AutoTokenizer  # type: ignore[import]
 
@@ -424,6 +431,13 @@ def _measure_f1(model_path: Path, quant_path: Path) -> tuple[float, float]:
 
 def _require_autoawq() -> None:
     """Raise QuantizationError with install instructions if autoawq is absent."""
+    # autoawq 0.2.5 calls transformers.shard_checkpoint at import time;
+    # that symbol was removed in transformers 5.x — patch before importing.
+    import transformers.modeling_utils as _tm
+    if not hasattr(_tm, "shard_checkpoint"):
+        def shard_checkpoint(state_dict, max_shard_size="10GB", weights_name="pytorch_model.bin"):
+            return {weights_name: state_dict}, {}
+        _tm.shard_checkpoint = shard_checkpoint
     try:
         import awq  # noqa: F401  # type: ignore[import]
     except ImportError as exc:

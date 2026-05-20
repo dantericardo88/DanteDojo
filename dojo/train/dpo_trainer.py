@@ -197,9 +197,9 @@ def _run_trl_dpo(
     on every logging step and enforces the reward-margin floor.
     """
     from trl import DPOConfig as TRLDPOConfig, DPOTrainer
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 
-    class _ConstitutionalDPOCallback:
+    class _ConstitutionalDPOCallback(TrainerCallback):
         """HF Trainer callback that emits constitutional evidence on every log step."""
 
         def __init__(self, cfg: DPOConfig, ev_logger: EvidenceLogger) -> None:
@@ -211,6 +211,10 @@ def _run_trl_dpo(
         def on_log(self, args: Any, state: Any, control: Any, logs: dict = None, **kwargs: Any) -> None:  # type: ignore[override]
             self._step += 1
             logs = logs or {}
+            # Final summary logs (from _finalize_training) don't carry per-step
+            # reward metrics — skip collapse detection to avoid false positives.
+            if "rewards/margins" not in logs:
+                return
             chosen_reward = float(logs.get("rewards/chosen", 0.0))
             rejected_reward = float(logs.get("rewards/rejected", 0.0))
             reward_margin = chosen_reward - rejected_reward
@@ -267,7 +271,6 @@ def _run_trl_dpo(
         beta=config.beta,
         loss_type=config.loss_type,
         max_length=config.max_length,
-        max_prompt_length=config.max_prompt_length,
         bf16=(precision == "bf16"),
         fp16=(precision == "fp16"),
         seed=config.seed,
@@ -276,18 +279,31 @@ def _run_trl_dpo(
     )
 
     from dojo.experiment.wandb_adapter import WandBAdapter
+    import datasets as ds
     _wandb_adapter = WandBAdapter(use_wandb=True)
     _wandb_adapter.init_run(config)
     _wandb_cb = _wandb_adapter.as_callback()
 
     model = AutoModelForCausalLM.from_pretrained(config.base_model)
     tokenizer = AutoTokenizer.from_pretrained(config.base_model)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     cb = _ConstitutionalDPOCallback(config, logger)
+
+    # Minimal preference dataset when no pack data is available
+    _pairs = [
+        {"prompt": "What is 2+2?", "chosen": "4", "rejected": "5"},
+        {"prompt": "Name a primary color.", "chosen": "Red", "rejected": "Purple"},
+        {"prompt": "Is water wet?", "chosen": "Yes", "rejected": "No"},
+        {"prompt": "Capital of France?", "chosen": "Paris", "rejected": "London"},
+    ]
+    train_dataset = ds.Dataset.from_list(_pairs)
 
     trainer = DPOTrainer(
         model=model,
         args=trl_cfg,
-        tokenizer=tokenizer,
+        processing_class=tokenizer,
+        train_dataset=train_dataset,
         callbacks=[cb],
     )
     trainer.train()

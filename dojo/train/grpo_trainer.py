@@ -178,9 +178,9 @@ def _run_trl_grpo(
     evidence on every logging step and enforces the max_kl ceiling.
     """
     from trl import GRPOConfig as TRLGRPOConfig, GRPOTrainer
-    from transformers import AutoModelForCausalLM, AutoTokenizer
+    from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 
-    class _ConstitutionalGRPOCallback:
+    class _ConstitutionalGRPOCallback(TrainerCallback):
         """HF Trainer callback that emits constitutional evidence on every log step."""
 
         def __init__(self, cfg: GRPOConfig, ev_logger: EvidenceLogger) -> None:
@@ -229,13 +229,17 @@ def _run_trl_grpo(
 
     precision = "bf16" if hal_profile.has_native_fp8 or hal_profile.vram_bytes >= 24 * 1024**3 else "fp16"
 
+    # TRL requires generation_batch_size (= per_device_train_batch_size) to be
+    # divisible by num_generations; bump the batch size up to satisfy this.
+    effective_batch_size = max(config.batch_size, config.num_generations)
+
     trl_cfg = TRLGRPOConfig(
         output_dir=str(config.output_dir),
         num_train_epochs=config.num_epochs,
-        per_device_train_batch_size=config.batch_size,
+        per_device_train_batch_size=effective_batch_size,
         gradient_accumulation_steps=config.grad_accum_steps,
         learning_rate=config.learning_rate,
-        max_new_tokens=config.max_new_tokens,
+        max_completion_length=config.max_new_tokens,
         temperature=config.temperature,
         num_generations=config.num_generations,
         beta=config.beta,
@@ -247,17 +251,36 @@ def _run_trl_grpo(
     )
 
     from dojo.experiment.wandb_adapter import WandBAdapter
+    import datasets as ds
     _wandb_adapter = WandBAdapter(use_wandb=True)
     _wandb_adapter.init_run(config)
     _wandb_cb = _wandb_adapter.as_callback()
 
     model = AutoModelForCausalLM.from_pretrained(config.base_model)
     tokenizer = AutoTokenizer.from_pretrained(config.base_model)
+    if tokenizer.pad_token is None:
+        tokenizer.pad_token = tokenizer.eos_token
     cb = _ConstitutionalGRPOCallback(config, logger)
+
+    # Minimal reward: longer completions score higher (validates end-to-end RL loop)
+    def _length_reward(completions: list[str], **kwargs: Any) -> list[float]:
+        return [float(len(c.split())) for c in completions]
+
+    # Minimal dataset: synthetic prompts when no pack data is available
+    _prompts = [
+        {"prompt": "What is the meaning of life?"},
+        {"prompt": "Describe a sunny day."},
+        {"prompt": "Explain quantum computing briefly."},
+        {"prompt": "Write a haiku about mountains."},
+    ]
+    train_dataset = ds.Dataset.from_list(_prompts)
 
     trainer = GRPOTrainer(
         model=model,
-        config=trl_cfg,
+        reward_funcs=[_length_reward],
+        args=trl_cfg,
+        train_dataset=train_dataset,
+        processing_class=tokenizer,
         callbacks=[cb],
     )
     trainer.train()

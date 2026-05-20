@@ -236,6 +236,16 @@ def _run_real_gptq_quantization(
     Only called when DOJO_REAL_GPU=1 and gptqmodel is installed.
     Uses wikitext-2 for calibration data (standard GPTQ calibration).
     """
+    import sys  # noqa: E401
+    # Windows fix: gptqmodel's logbar prints Unicode/emoji; cp1252 console can't
+    # encode them. reconfigure() changes encoding in-place without replacing the
+    # object (safe under pytest capture which holds a reference to the same obj).
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, Exception):
+            pass  # StringIO (pytest) or non-reconfigurable stream
     from gptqmodel import GPTQModel, QuantizeConfig  # type: ignore[import]
     from datasets import load_dataset  # type: ignore[import]
 
@@ -374,6 +384,13 @@ def _measure_ppl(model_path: Path, quant_path: Path) -> tuple[float, float]:
 
     # Real GPU path
     try:
+        import sys  # noqa: E401
+        if sys.platform == "win32":
+            try:
+                sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+                sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            except (AttributeError, Exception):
+                pass
         from gptqmodel import GPTQModel  # type: ignore[import]
         try:
             from gptqmodel.utils.eval import evalulate  # type: ignore[import]
@@ -402,6 +419,13 @@ def _measure_ppl(model_path: Path, quant_path: Path) -> tuple[float, float]:
 
 def _require_gptqmodel() -> None:
     """Raise QuantizationError with install instructions if gptqmodel is absent."""
+    import sys  # noqa: E401
+    if sys.platform == "win32":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, Exception):
+            pass
     try:
         import gptqmodel  # noqa: F401  # type: ignore[import]
     except ImportError as exc:
