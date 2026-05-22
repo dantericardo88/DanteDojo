@@ -38,6 +38,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import torch  # noqa: F401  # pre-load before sys.modules patching to prevent double-init
+import transformers  # noqa: F401  # pre-load top-level package
+import transformers.modeling_utils  # noqa: F401  # pre-load submodule so its PyO3 deps (tokenizers, safetensors) are in sys.modules before any patch.dict
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
 from dojo.core.exceptions import QuantizationError, QuantQualityRejected

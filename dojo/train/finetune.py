@@ -291,6 +291,7 @@ def _run_real_sft(
     try:
         import trl
         import transformers
+        from transformers import TrainerCallback as _TrainerCallback
         import datasets as ds
     except Exception:
         import sys as _sys
@@ -321,7 +322,7 @@ def _run_real_sft(
     _step_cbs: list = []
     if exp_tracker is not None:
         _tracker_ref = exp_tracker
-        class _StepMetricCallback(transformers.TrainerCallback):
+        class _StepMetricCallback(_TrainerCallback):
             def on_log(self, args: Any, state: Any, control: Any, logs: Any = None, **kw: Any) -> None:
                 if logs and "loss" in logs:
                     _tracker_ref.log_metric("train/loss", float(logs["loss"]), step=state.global_step)
@@ -400,6 +401,7 @@ def _run_real_qlora(
         import peft
         import trl
         import transformers
+        from transformers import TrainerCallback as _TrainerCallback
         import datasets as ds
     except ImportError:
         import sys as _sys
@@ -463,7 +465,7 @@ def _run_real_qlora(
     _qlora_step_cbs: list = []
     if exp_tracker is not None:
         _qlora_tracker_ref = exp_tracker
-        class _QLoRAStepMetricCallback(transformers.TrainerCallback):
+        class _QLoRAStepMetricCallback(_TrainerCallback):
             def on_log(self, args: Any, state: Any, control: Any, logs: Any = None, **kw: Any) -> None:
                 if logs and "loss" in logs:
                     _qlora_tracker_ref.log_metric("train/loss", float(logs["loss"]), step=state.global_step)
@@ -800,7 +802,11 @@ def finetune(
                     organ="quant",
                 )
 
-        if not backend_available:
+        if config.training_mode == "fp8":
+            # FP8 manages its own torchao dependency inside _run_real_fp8;
+            # evaluated first so it bypasses the backend-availability gate.
+            steps_completed, final_loss = _run_real_fp8(config, logger, ckpt_mgr, pack)
+        elif not backend_available:
             warnings.warn(
                 f"Backend '{backend.value}' is not installed. "
                 "Returning stub FinetuneResult without real training.",
@@ -809,8 +815,6 @@ def finetune(
             _maybe_run_wandb_sim_callback()
             _maybe_emit_nf4_config()
             steps_completed, final_loss = _simulate_training_steps(config, logger, ckpt_mgr)
-        elif config.training_mode == "fp8":
-            steps_completed, final_loss = _run_real_fp8(config, logger, ckpt_mgr, pack)
         elif config.training_mode == "bf16":
             steps_completed, final_loss = _run_real_sft(config, logger, ckpt_mgr, pack, exp_tracker=exp_tracker)
         elif backend == TrainingBackend.WSL_UNSLOTH:

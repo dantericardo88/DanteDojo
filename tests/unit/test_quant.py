@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+import os
 import sys
 from unittest.mock import patch
 
@@ -149,27 +150,29 @@ class TestExportGguf:
 
 class TestExportGptq:
     def test_raises_when_gptqmodel_missing(self, tmp_path):
-        """When gptqmodel is not importable, raise QuantizationError."""
+        """When gptqmodel is not importable in real-GPU mode, raise QuantizationError."""
         from dojo.quant import gptq as gptq_module
 
-        with patch.dict(sys.modules, {"gptqmodel": None}):
-            with pytest.raises(QuantizationError) as exc_info:
-                gptq_module.export_gptq(
-                    model_path=tmp_path / "model",
-                    output_dir=tmp_path / "out",
-                )
+        with patch.dict(os.environ, {"DOJO_REAL_GPU": "1"}):
+            with patch.dict(sys.modules, {"gptqmodel": None}):
+                with pytest.raises(QuantizationError) as exc_info:
+                    gptq_module.export_gptq(
+                        model_path=tmp_path / "model",
+                        output_dir=tmp_path / "out",
+                    )
         assert "gptq" in str(exc_info.value).lower()
 
     def test_error_mentions_correct_package(self, tmp_path):
         """Error message should reference gptq-model, not auto-gptq."""
         from dojo.quant import gptq as gptq_module
 
-        with patch.dict(sys.modules, {"gptqmodel": None}):
-            with pytest.raises(QuantizationError) as exc_info:
-                gptq_module.export_gptq(
-                    model_path=tmp_path / "model",
-                    output_dir=tmp_path / "out",
-                )
+        with patch.dict(os.environ, {"DOJO_REAL_GPU": "1"}):
+            with patch.dict(sys.modules, {"gptqmodel": None}):
+                with pytest.raises(QuantizationError) as exc_info:
+                    gptq_module.export_gptq(
+                        model_path=tmp_path / "model",
+                        output_dir=tmp_path / "out",
+                    )
         msg = str(exc_info.value)
         assert "gptq-model" in msg or "gptqmodel" in msg.lower()
 
@@ -180,26 +183,28 @@ class TestExportGptq:
 
 class TestExportAwq:
     def test_raises_when_autoawq_missing(self, tmp_path):
-        """When autoawq (awq) is not importable, raise QuantizationError."""
+        """When autoawq (awq) is not importable in real-GPU mode, raise QuantizationError."""
         from dojo.quant import awq as awq_module
 
-        with patch.dict(sys.modules, {"awq": None}):
-            with pytest.raises(QuantizationError) as exc_info:
-                awq_module.export_awq(
-                    model_path=tmp_path / "model",
-                    output_dir=tmp_path / "out",
-                )
+        with patch.dict(os.environ, {"DOJO_REAL_GPU": "1"}):
+            with patch.dict(sys.modules, {"awq": None}):
+                with pytest.raises(QuantizationError) as exc_info:
+                    awq_module.export_awq(
+                        model_path=tmp_path / "model",
+                        output_dir=tmp_path / "out",
+                    )
         assert "autoawq" in str(exc_info.value).lower() or "awq" in str(exc_info.value).lower()
 
     def test_error_mentions_correct_package(self, tmp_path):
         """Error message should reference autoawq, not llmcompressor."""
         from dojo.quant import awq as awq_module
 
-        with patch.dict(sys.modules, {"awq": None}):
-            with pytest.raises(QuantizationError) as exc_info:
-                awq_module.export_awq(
-                    model_path=tmp_path / "model",
-                    output_dir=tmp_path / "out",
-                )
+        with patch.dict(os.environ, {"DOJO_REAL_GPU": "1"}):
+            with patch.dict(sys.modules, {"awq": None}):
+                with pytest.raises(QuantizationError) as exc_info:
+                    awq_module.export_awq(
+                        model_path=tmp_path / "model",
+                        output_dir=tmp_path / "out",
+                    )
         msg = str(exc_info.value)
         assert "autoawq" in msg.lower() or "pip install autoawq" in msg.lower()
