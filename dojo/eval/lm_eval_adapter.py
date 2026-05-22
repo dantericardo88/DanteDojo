@@ -330,7 +330,7 @@ def run_lm_eval(
                     "or set allow_synthetic=True for CI environments."
                 ),
             )
-        # Synthetic path
+        # Synthetic path — emit per-task EVAL_SYNTHETIC_FALLBACK evidence
         results: Dict[str, LmEvalRunResult] = {}
         for spec in specs:
             score = _synthetic_score(spec.name, model_artifact.artifact_id, seed)
@@ -342,6 +342,21 @@ def run_lm_eval(
                 raw_results_hash=_synthetic_results_hash(spec.name, model_artifact.artifact_id, seed),
                 is_synthetic=True,
             )
+            # Constitutional: emit per-task synthetic fallback evidence
+            logger.emit(
+                {
+                    "type": EvidenceType.EVAL_SYNTHETIC_FALLBACK.value,
+                    "data": {
+                        "task": spec.name,
+                        "few_shot_count": spec.num_fewshot,
+                        "score": score,
+                        "is_synthetic": True,
+                        "model_artifact_id": model_artifact.artifact_id,
+                        "seed": seed,
+                    },
+                },
+                organ="eval",
+            )
         logger.emit(
             {
                 "type": EvidenceType.EVAL_LM_HARNESS_COMPLETE.value,
@@ -350,6 +365,7 @@ def run_lm_eval(
                     "source": "synthetic_fallback",
                     "tasks": tasks,
                     "scores": {k: v.score for k, v in results.items()},
+                    "num_fewshot": {k: v.num_fewshot for k, v in results.items()},
                 },
             },
             organ="eval",

@@ -123,6 +123,7 @@ def _make_mock_transformers():
     m.Trainer = MagicMock()
     m.BitsAndBytesConfig = MagicMock(return_value=MagicMock())
     m.DataCollatorForSeq2Seq = MagicMock()
+    m.TrainerCallback = MagicMock()
     return m
 
 

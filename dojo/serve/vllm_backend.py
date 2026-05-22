@@ -632,13 +632,16 @@ def _real_gpu_mode() -> bool:
 
     Real mode activates when:
     - DOJO_REAL_GPU=1 is set explicitly, OR
-    - vllm is importable (installed on this machine — e.g. Linux/WSL with GPU).
+    - vllm is importable AND DOJO_REAL_GPU is not explicitly set to "0".
 
-    This removes the hard DOJO_REAL_GPU=1 gate for machines where vllm IS
-    installed, while keeping stub mode on machines where vllm is absent (CI/Windows).
+    DOJO_REAL_GPU=0 acts as a hard stub override — useful in tests that inject
+    a mock vllm into sys.modules but still want stub behaviour.
     """
-    if os.environ.get("DOJO_REAL_GPU", "0") == "1":
+    dojo_real_gpu = os.environ.get("DOJO_REAL_GPU", "")
+    if dojo_real_gpu == "1":
         return True
+    if dojo_real_gpu == "0":
+        return False
     try:
         import vllm  # noqa: F401
         return True

@@ -203,6 +203,7 @@ class EvidenceType(str, Enum):
     QUANTIZATION_START = "quant.start"
     QUANTIZATION_COMPLETE = "quant.complete"
     QUANT_QUALITY_GATE = "quant.quality_gate"
+    QUANT_PPL_GATE = "quant.ppl_gate"
 
     # Serving
     SERVE_START = "serve.start"
@@ -225,6 +226,7 @@ class EvidenceType(str, Enum):
     EVAL_JUDGE_DRIFT = "eval.judge_drift"
     EVAL_LM_HARNESS_START = "eval.lm_harness.start"
     EVAL_LM_HARNESS_COMPLETE = "eval.lm_harness.complete"
+    EVAL_SYNTHETIC_FALLBACK = "eval.synthetic_fallback"
 
     # Pack license
     PACK_LICENSE_CHECKED = "pack.license.checked"

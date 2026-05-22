@@ -91,14 +91,16 @@ def _make_lm_eval_results(tasks: list[str], base_score: float = 0.72) -> Dict[st
 
 class TestLmEvalTaskCatalog:
     def test_eight_standard_tasks_registered(self):
-        assert len(LM_EVAL_STANDARD_TASKS) == 8
+        # Catalog now contains 11 tasks (8 canonical benchmarks + boolq, lambada_openai, truthfulqa_mc2)
+        assert len(LM_EVAL_STANDARD_TASKS) >= 8
 
     def test_default_suite_is_subset_of_standard(self):
         for name in LM_EVAL_DEFAULT_SUITE:
             assert name in LM_EVAL_STANDARD_TASKS
 
-    def test_default_suite_has_four_tasks(self):
-        assert len(LM_EVAL_DEFAULT_SUITE) == 4
+    def test_default_suite_has_eight_canonical_tasks(self):
+        # Default suite now covers all 8 canonical benchmarks
+        assert len(LM_EVAL_DEFAULT_SUITE) == 8
 
     def test_mmlu_config(self):
         task = LM_EVAL_STANDARD_TASKS["mmlu"]

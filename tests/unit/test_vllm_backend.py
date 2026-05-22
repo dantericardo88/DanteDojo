@@ -15,6 +15,7 @@ Covers:
 
 from __future__ import annotations
 
+import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -71,7 +72,8 @@ def inject_vllm_stub():
     """Inject a stub vllm module so BackendUnavailable is not raised in normal tests."""
     mock_vllm = MagicMock()
     with patch.dict(sys.modules, {"vllm": mock_vllm}):
-        yield mock_vllm
+        with patch.dict(os.environ, {"DOJO_REAL_GPU": "0"}):
+            yield mock_vllm
 
 
 # ---------------------------------------------------------------------------

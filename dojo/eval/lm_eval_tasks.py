@@ -58,6 +58,13 @@ LM_EVAL_STANDARD_TASKS: Dict[str, LmEvalTask] = {
         primary_metric_key="acc_norm,none",
         alt_metric_keys=("acc,none",),
     ),
+    "arc_easy": LmEvalTask(
+        name="arc_easy",
+        description="ARC Easy — elementary science questions, 25-shot",
+        default_num_fewshot=25,
+        primary_metric_key="acc_norm,none",
+        alt_metric_keys=("acc,none",),
+    ),
     "arc_challenge": LmEvalTask(
         name="arc_challenge",
         description="ARC Challenge — science questions requiring reasoning, 25-shot",
@@ -72,12 +79,33 @@ LM_EVAL_STANDARD_TASKS: Dict[str, LmEvalTask] = {
         primary_metric_key="acc,none",
         alt_metric_keys=(),
     ),
+    "gsm8k": LmEvalTask(
+        name="gsm8k",
+        description="GSM8K — grade-school math word problems, 8-shot chain-of-thought",
+        default_num_fewshot=8,
+        primary_metric_key="exact_match,get-answer",
+        alt_metric_keys=("acc,none", "exact_match,none"),
+    ),
+    "truthfulqa_mc1": LmEvalTask(
+        name="truthfulqa_mc1",
+        description="TruthfulQA MC1 — measures model truthfulness, single correct answer, 0-shot",
+        default_num_fewshot=0,
+        primary_metric_key="acc,none",
+        alt_metric_keys=("mc1,none",),
+    ),
     "truthfulqa_mc2": LmEvalTask(
         name="truthfulqa_mc2",
-        description="TruthfulQA MC2 — measures model truthfulness, 0-shot",
+        description="TruthfulQA MC2 — measures model truthfulness, multiple correct answers, 0-shot",
         default_num_fewshot=0,
         primary_metric_key="acc,none",
         alt_metric_keys=("mc2,none",),
+    ),
+    "math_hard": LmEvalTask(
+        name="math_hard",
+        description="MATH Hard — competition mathematics problems requiring multi-step reasoning, 4-shot",
+        default_num_fewshot=4,
+        primary_metric_key="exact_match,none",
+        alt_metric_keys=("acc,none", "acc_norm,none"),
     ),
     "boolq": LmEvalTask(
         name="boolq",
@@ -85,13 +113,6 @@ LM_EVAL_STANDARD_TASKS: Dict[str, LmEvalTask] = {
         default_num_fewshot=0,
         primary_metric_key="acc,none",
         alt_metric_keys=(),
-    ),
-    "gsm8k": LmEvalTask(
-        name="gsm8k",
-        description="GSM8K — grade-school math word problems, 5-shot chain-of-thought",
-        default_num_fewshot=5,
-        primary_metric_key="exact_match,get-answer",
-        alt_metric_keys=("acc,none", "exact_match,none"),
     ),
     "lambada_openai": LmEvalTask(
         name="lambada_openai",
@@ -102,12 +123,19 @@ LM_EVAL_STANDARD_TASKS: Dict[str, LmEvalTask] = {
     ),
 }
 
-# Default suite: the four tasks that form the standard open LLM leaderboard core
+# Default suite: the eight canonical benchmarks for the open LLM leaderboard
+# with correct few-shot counts:
+#   mmlu (5-shot), hellaswag (10-shot), arc_easy (25-shot), arc_challenge (25-shot),
+#   winogrande (5-shot), gsm8k (8-shot), truthfulqa_mc1 (0-shot), math_hard (4-shot)
 LM_EVAL_DEFAULT_SUITE: Tuple[str, ...] = (
     "mmlu",
     "hellaswag",
+    "arc_easy",
     "arc_challenge",
     "winogrande",
+    "gsm8k",
+    "truthfulqa_mc1",
+    "math_hard",
 )
 
 
