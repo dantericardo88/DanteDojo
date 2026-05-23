@@ -64,6 +64,134 @@ def detect(
 
 
 # ---------------------------------------------------------------------------
+# Turbocharge — autonomous GPU optimizer
+# ---------------------------------------------------------------------------
+
+@app.command()
+def turbocharge(
+    model: str = typer.Argument(..., help="HuggingFace model ID or local path"),
+    ppl_budget: float = typer.Option(0.15, "--ppl-budget",
+                                     help="Max PPL regression fraction (0.15 = 15%)"),
+    optimize: str = typer.Option("inference", "--optimize",
+                                  help="Optimize for: inference | training"),
+    device: str = typer.Option("cuda:0", "--device", help="Target CUDA device"),
+    bench_steps: int = typer.Option(20, "--bench-steps", help="Forward-pass benchmark steps"),
+    json_out: bool = typer.Option(False, "--json", help="Output winner as JSON"),
+) -> None:
+    """Autonomously find the optimal quantization + precision config for this GPU.
+
+    Benchmarks BF16 baseline and FP8 (when supported) inference throughput,
+    then selects the Pareto-optimal config that maximizes tokens/sec while
+    keeping PPL regression within --ppl-budget.  Writes the result to
+    ~/.dojo/turbo_config.json.
+    """
+    from dojo.turbo.config import TurboConfig
+    from dojo.turbo.turbocharge import turbocharge as _turbocharge
+
+    cfg = TurboConfig(
+        model=model,
+        ppl_budget=ppl_budget,
+        optimize=optimize,
+        device=device,
+        bench_steps=bench_steps,
+    )
+
+    with console.status(f"[bold green]Turbocharging {model}…[/bold green]"):
+        result = _turbocharge(cfg)
+
+    w = result.winner
+    if json_out:
+        import dataclasses
+        typer.echo(json.dumps({
+            "model": result.model,
+            "gpu": result.gpu,
+            "sm": result.sm,
+            "winner": {
+                "precision": w.precision,
+                "quant_scheme": w.quant_scheme,
+                "tokens_per_sec": w.tokens_per_sec,
+                "ppl": w.ppl,
+                "vram_gb": w.vram_gb,
+            },
+        }, indent=2))
+    else:
+        console.print(f"\n[bold green]Turbocharge complete — {result.gpu} (SM {result.sm})[/bold green]")
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Precision")
+        table.add_column("Quant")
+        table.add_column("TPS", justify="right")
+        table.add_column("PPL", justify="right")
+        table.add_column("VRAM GB", justify="right")
+        table.add_column("Status")
+        for r in result.all_results:
+            winner_mark = " ★" if r is w else ""
+            table.add_row(
+                r.precision, r.quant_scheme,
+                f"{r.tokens_per_sec:.1f}", f"{r.ppl:.4f}",
+                f"{r.vram_gb:.2f}",
+                f"[green]OK{winner_mark}[/green]" if r.success else "[red]FAIL[/red]",
+            )
+        console.print(table)
+        console.print(f"\n[bold]Winner:[/bold] {w.precision} / {w.quant_scheme}  "
+                      f"→ {w.tokens_per_sec:.1f} tps  PPL={w.ppl:.4f}")
+        console.print(f"Config written to ~/.dojo/turbo_config.json")
+
+
+# ---------------------------------------------------------------------------
+# Research — arXiv harvest loop
+# ---------------------------------------------------------------------------
+
+research_app = typer.Typer(help="arXiv research harvest commands.", no_args_is_help=True)
+app.add_typer(research_app, name="research")
+
+
+@research_app.command("scan")
+def research_scan(
+    queries: List[str] = typer.Option(
+        ["quantization", "flash attention", "fine-tuning", "LoRA", "GRPO"],
+        "--query", "-q",
+        help="arXiv query strings (repeatable)",
+    ),
+    output_dir: str = typer.Option(
+        "tests/research",
+        "--output-dir", "-o",
+        help="Directory for generated test stubs",
+    ),
+    max_results: int = typer.Option(10, "--max-results", help="Papers per query"),
+    no_evidence: bool = typer.Option(False, "--no-evidence", help="Skip evidence emission"),
+) -> None:
+    """Scan arXiv for ML papers and generate GPU test stubs from capability claims.
+
+    Fetches recent papers for each --query, extracts technique claims, maps them
+    to matrix dimensions (d01-d50), and generates pytest stubs in --output-dir.
+    """
+    from dojo.research.harvest_loop import run_harvest
+
+    out = Path(output_dir)
+    console.print(f"[bold cyan]arXiv harvest scan[/bold cyan]  queries={queries}")
+
+    with console.status("[bold green]Scanning arXiv…[/bold green]"):
+        result = run_harvest(
+            queries=queries,
+            output_dir=out,
+            max_results_per_query=max_results,
+            emit_evidence=not no_evidence,
+        )
+
+    console.print(f"\n[green]Harvest complete[/green]")
+    console.print(f"  Papers scanned:   {result.papers_scanned}")
+    console.print(f"  Claims extracted: {result.claims_extracted}")
+    console.print(f"  Stubs generated:  {result.stubs_generated}  → {output_dir}/")
+
+    if result.stubs:
+        console.print(f"\n[bold]Generated stubs:[/bold]")
+        for p in result.stubs[:10]:
+            console.print(f"  {p.name}")
+        if len(result.stubs) > 10:
+            console.print(f"  … and {len(result.stubs) - 10} more")
+
+
+# ---------------------------------------------------------------------------
 # Pack management
 # ---------------------------------------------------------------------------
 
