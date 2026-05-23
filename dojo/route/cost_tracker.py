@@ -281,6 +281,157 @@ class CostTracker:
 
         return status
 
+    def monthly_forecast(self, year: int, month: int) -> dict:
+        """Project full-month cost based on actual spend and days elapsed.
+
+        Uses the daily spend rate from actual JSONL records to extrapolate the
+        remaining days in the month, giving an evidence-backed budget forecast.
+
+        Args:
+            year: Calendar year (e.g. 2026).
+            month: Calendar month 1–12.
+
+        Returns:
+            dict with:
+              - actual_usd: spend so far this month
+              - projected_usd: extrapolated full-month total
+              - days_elapsed: calendar days with at least one receipt
+              - days_in_month: total calendar days in the month
+              - daily_rate_usd: actual_usd / days_elapsed (0.0 if no data)
+        """
+        import calendar
+        from datetime import date
+
+        receipts = self.load_receipts()
+        days_in_month = calendar.monthrange(year, month)[1]
+
+        month_receipts = [
+            r for r in receipts
+            if r.recorded_at.year == year and r.recorded_at.month == month
+        ]
+
+        actual_usd = round(sum(r.cost_usd for r in month_receipts), 6)
+
+        if not month_receipts:
+            return {
+                "actual_usd": 0.0,
+                "projected_usd": 0.0,
+                "days_elapsed": 0,
+                "days_in_month": days_in_month,
+                "daily_rate_usd": 0.0,
+            }
+
+        active_days = len({r.recorded_at.date() for r in month_receipts})
+        daily_rate = round(actual_usd / active_days, 8) if active_days > 0 else 0.0
+        projected_usd = round(daily_rate * days_in_month, 6)
+
+        logger = EvidenceLogger.get_instance()
+        logger.emit(
+            {
+                "type": "cost.monthly_forecast",
+                "data": {
+                    "year": year,
+                    "month": month,
+                    "actual_usd": actual_usd,
+                    "projected_usd": projected_usd,
+                    "daily_rate_usd": daily_rate,
+                    "days_elapsed": active_days,
+                    "days_in_month": days_in_month,
+                },
+            },
+            organ="route",
+        )
+
+        return {
+            "actual_usd": actual_usd,
+            "projected_usd": projected_usd,
+            "days_elapsed": active_days,
+            "days_in_month": days_in_month,
+            "daily_rate_usd": daily_rate,
+        }
+
+    def cost_breakdown_by_task(self) -> dict[str, dict]:
+        """Return per-task cost aggregation across all stored receipts.
+
+        Groups all receipts by their ``task`` field and returns cost/token/call
+        statistics per task — useful for identifying the most expensive workloads.
+
+        Returns:
+            dict mapping task name → dict with:
+              - total_usd: cumulative cost for this task
+              - total_tokens: total input + output tokens
+              - call_count: number of receipts
+              - avg_cost_usd: mean cost per call
+        """
+        receipts = self.load_receipts()
+        breakdown: dict[str, dict] = {}
+
+        for r in receipts:
+            key = r.task
+            if key not in breakdown:
+                breakdown[key] = {
+                    "total_usd": 0.0,
+                    "total_tokens": 0,
+                    "call_count": 0,
+                    "avg_cost_usd": 0.0,
+                }
+            breakdown[key]["total_usd"] = round(breakdown[key]["total_usd"] + r.cost_usd, 8)
+            breakdown[key]["total_tokens"] += r.tokens_in + r.tokens_out
+            breakdown[key]["call_count"] += 1
+
+        for task_data in breakdown.values():
+            n = task_data["call_count"]
+            task_data["avg_cost_usd"] = round(task_data["total_usd"] / n, 8) if n > 0 else 0.0
+
+        return breakdown
+
+    def savings_report(self) -> dict:
+        """Compute total cost savings from routing to local inference vs paid APIs.
+
+        Sums the ``local_displaced_estimate_usd`` field across all receipts to
+        show how much routing to Ollama/local saved compared to what the same
+        workload would have cost on a paid API provider.
+
+        Returns:
+            dict with:
+              - total_local_displaced_usd: total estimated savings (sum of all
+                ``local_displaced_estimate_usd`` values across all receipts)
+              - total_actual_usd: total real spend (sum of cost_usd)
+              - savings_fraction: local_displaced / (local_displaced + actual)
+                — fraction of potential spend that was avoided
+              - receipt_count: total number of receipts
+        """
+        receipts = self.load_receipts()
+        total_displaced = sum(r.local_displaced_estimate_usd for r in receipts)
+        total_actual = sum(r.cost_usd for r in receipts)
+        total_potential = total_displaced + total_actual
+        savings_fraction = (
+            round(total_displaced / total_potential, 4)
+            if total_potential > 0
+            else 0.0
+        )
+
+        logger = EvidenceLogger.get_instance()
+        logger.emit(
+            {
+                "type": "cost.savings_report",
+                "data": {
+                    "total_local_displaced_usd": round(total_displaced, 6),
+                    "total_actual_usd": round(total_actual, 6),
+                    "savings_fraction": savings_fraction,
+                    "receipt_count": len(receipts),
+                },
+            },
+            organ="route",
+        )
+
+        return {
+            "total_local_displaced_usd": round(total_displaced, 6),
+            "total_actual_usd": round(total_actual, 6),
+            "savings_fraction": savings_fraction,
+            "receipt_count": len(receipts),
+        }
+
     def load_receipts(self) -> list[CostReceipt]:
         """Load all receipts from JSONL storage.
 

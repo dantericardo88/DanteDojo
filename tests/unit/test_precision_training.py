@@ -343,3 +343,166 @@ class TestFinetuneConfigTrainingMode:
         cfg_sft = FinetuneConfig(pack_id="p", base_model="m", training_mode="sft")
         cfg_fp8 = FinetuneConfig(pack_id="p", base_model="m", training_mode="fp8")
         assert cfg_sft.config_hash() != cfg_fp8.config_hash()
+
+    def test_fp4_training_mode_accepted(self):
+        cfg = FinetuneConfig(pack_id="p", base_model="m", training_mode="fp4")
+        assert cfg.training_mode == "fp4"
+
+    def test_fp4_training_mode_in_to_dict(self):
+        cfg = FinetuneConfig(pack_id="p", base_model="m", training_mode="fp4")
+        assert cfg.to_dict()["training_mode"] == "fp4"
+
+
+# ---------------------------------------------------------------------------
+# d12 — FP4 tests
+# ---------------------------------------------------------------------------
+
+class TestFP4Training:
+    """d12: FP4 (E2M1) training requiring SM >= 10.0 (Blackwell)."""
+
+    def test_fp4_sm100_allowed(self, tmp_path, monkeypatch):
+        """SM=10.0 (Blackwell) must not raise PrecisionUnsupported."""
+        monkeypatch.setenv("DOJO_MOCK_SM", "10.0")
+
+        from dojo.train.finetune import _run_real_fp4
+
+        logger = EvidenceLogger.get_instance()
+        ckpt_mgr = CheckpointManager(tmp_path / "ckpt", max_checkpoints=3)
+        cfg = _make_config("fp4", tmp_path)
+
+        steps, loss = _run_real_fp4(cfg, logger, ckpt_mgr, _make_pack())
+        assert steps >= 0
+        assert loss >= 0.0
+
+    def test_fp4_sm89_blocked(self, tmp_path, monkeypatch):
+        """SM=8.9 (Ada Lovelace) must raise PrecisionUnsupported for FP4."""
+        monkeypatch.setenv("DOJO_MOCK_SM", "8.9")
+
+        from dojo.train.finetune import _run_real_fp4
+
+        logger = EvidenceLogger.get_instance()
+        ckpt_mgr = CheckpointManager(tmp_path / "ckpt", max_checkpoints=3)
+        cfg = _make_config("fp4", tmp_path)
+
+        with pytest.raises(PrecisionUnsupported):
+            _run_real_fp4(cfg, logger, ckpt_mgr, _make_pack())
+
+    def test_fp4_sm86_blocked(self, tmp_path, monkeypatch):
+        """SM=8.6 (Ampere) must raise PrecisionUnsupported for FP4."""
+        monkeypatch.setenv("DOJO_MOCK_SM", "8.6")
+
+        from dojo.train.finetune import _run_real_fp4
+
+        logger = EvidenceLogger.get_instance()
+        ckpt_mgr = CheckpointManager(tmp_path / "ckpt", max_checkpoints=3)
+        cfg = _make_config("fp4", tmp_path)
+
+        with pytest.raises(PrecisionUnsupported):
+            _run_real_fp4(cfg, logger, ckpt_mgr, _make_pack())
+
+    def test_fp4_evidence_emitted(self, tmp_path, monkeypatch):
+        """TRAINING_BACKEND_SELECTED must include precision='fp4'."""
+        monkeypatch.setenv("DOJO_MOCK_SM", "10.0")
+
+        from dojo.train.finetune import _run_real_fp4
+
+        logger = EvidenceLogger.get_instance()
+        ckpt_mgr = CheckpointManager(tmp_path / "ckpt", max_checkpoints=3)
+        cfg = _make_config("fp4", tmp_path)
+
+        _run_real_fp4(cfg, logger, ckpt_mgr, _make_pack())
+
+        events = EvidenceLogger.get_events()
+        fp4_events = [
+            e for e in events
+            if e.get("data", {}).get("precision") == "fp4"
+        ]
+        assert fp4_events, "TRAINING_BACKEND_SELECTED with precision='fp4' must be emitted"
+
+    def test_fp4_backend_is_native_fp4(self, tmp_path, monkeypatch):
+        """Evidence backend field must be 'native_fp4'."""
+        monkeypatch.setenv("DOJO_MOCK_SM", "10.0")
+
+        from dojo.train.finetune import _run_real_fp4
+
+        logger = EvidenceLogger.get_instance()
+        ckpt_mgr = CheckpointManager(tmp_path / "ckpt", max_checkpoints=3)
+        cfg = _make_config("fp4", tmp_path)
+
+        _run_real_fp4(cfg, logger, ckpt_mgr, _make_pack())
+
+        events = EvidenceLogger.get_events()
+        native_events = [
+            e for e in events
+            if e.get("data", {}).get("backend") == "native_fp4"
+        ]
+        assert native_events, "backend='native_fp4' must appear in evidence"
+
+    def test_fp4_training_completes_ci_mode(self, tmp_path, monkeypatch):
+        """DOJO_REAL_GPU=0, SM=10.0: FP4 stub must return (steps, loss)."""
+        monkeypatch.setenv("DOJO_MOCK_SM", "10.0")
+
+        from dojo.train.finetune import _run_real_fp4
+
+        logger = EvidenceLogger.get_instance()
+        ckpt_mgr = CheckpointManager(tmp_path / "ckpt", max_checkpoints=3)
+        cfg = _make_config("fp4", tmp_path)
+
+        steps, loss = _run_real_fp4(cfg, logger, ckpt_mgr, _make_pack())
+
+        assert isinstance(steps, int) and steps > 0
+        assert isinstance(loss, float) and loss > 0.0
+
+    def test_fp4_sm_below_100_raises_with_informative_message(self, tmp_path, monkeypatch):
+        """SM=9.0 (Hopper) must raise PrecisionUnsupported with SM 10.0 in message."""
+        monkeypatch.setenv("DOJO_MOCK_SM", "9.0")
+
+        from dojo.train.finetune import _run_real_fp4
+
+        logger = EvidenceLogger.get_instance()
+        ckpt_mgr = CheckpointManager(tmp_path / "ckpt", max_checkpoints=3)
+        cfg = _make_config("fp4", tmp_path)
+
+        with pytest.raises(PrecisionUnsupported) as exc_info:
+            _run_real_fp4(cfg, logger, ckpt_mgr, _make_pack())
+
+        err = str(exc_info.value)
+        assert "10.0" in err, "Error message must mention required SM 10.0"
+        assert "9.0" in err or "SM" in err, "Error message must reference detected SM"
+
+    def test_fp4_via_finetune_entrypoint(self, tmp_path, monkeypatch):
+        """finetune() with training_mode='fp4' routes to FP4 path end-to-end."""
+        monkeypatch.setenv("DOJO_MOCK_SM", "10.0")
+
+        from unittest.mock import patch
+        from dojo.train.finetune import finetune
+
+        hal = _make_hal()
+        cfg = _make_config("fp4", tmp_path)
+
+        with patch("dojo.train.finetune._is_backend_available", return_value=True):
+            result = finetune(cfg, hal, _make_pack())
+
+        assert result.steps_completed >= 0
+        assert result.final_loss >= 0.0
+
+        events = EvidenceLogger.get_events()
+        fp4_events = [
+            e for e in events
+            if e.get("data", {}).get("precision") == "fp4"
+        ]
+        assert fp4_events, "FP4 evidence must appear when training_mode='fp4'"
+
+    def test_fp4_sm89_via_finetune_raises(self, tmp_path, monkeypatch):
+        """finetune() with FP4 mode and SM=8.9 must propagate PrecisionUnsupported."""
+        monkeypatch.setenv("DOJO_MOCK_SM", "8.9")
+
+        from unittest.mock import patch
+        from dojo.train.finetune import finetune
+
+        hal = _make_hal()
+        cfg = _make_config("fp4", tmp_path)
+
+        with patch("dojo.train.finetune._is_backend_available", return_value=True):
+            with pytest.raises(PrecisionUnsupported):
+                finetune(cfg, hal, _make_pack())

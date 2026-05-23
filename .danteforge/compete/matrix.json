@@ -3,7 +3,7 @@
   "competitors": [],
   "competitors_closed_source": [],
   "competitors_oss": [],
-  "lastUpdated": "2026-05-19T21:39:47.119Z",
+  "lastUpdated": "2026-05-22T18:11:33.774Z",
   "overallSelfScore": 3.6,
   "dimensions": [
     {
@@ -21,7 +21,7 @@
       "closed_source_leader": "unknown",
       "gap_to_oss_leader": 0,
       "oss_leader": "unknown",
-      "status": "not-started",
+      "status": "in-progress",
       "sprint_history": [],
       "next_sprint_target": 2.3,
       "capability_test": {

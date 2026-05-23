@@ -91,8 +91,10 @@ _TEST_SIGNATURE_SENTINEL = b"test_signature"
 
 # Known test public key (Ed25519, 32-byte raw public key encoded as hex).
 # Replace with real Harvest key for production deployments.
+# Corresponding private key seed: a3b4c5d6e7f8091a2b3c4d5e6f7081929394a5b6c7d8e9f0a1b2c3d4e5f60718
+# (stored in tests/unit/test_pack_ed25519_import.py as _DOJO_TEST_PRIVATE_KEY_SEED_HEX)
 _TEST_PUBLIC_KEY_HEX = (
-    "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+    "9ad70caee97ca73e29ebdd35f4bc759797ee5729bf1ab910c9925a3aaf9f7d50"
 )
 
 

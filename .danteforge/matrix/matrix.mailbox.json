@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-05-20T06:05:58.969Z",
+  "messages": [
+    {
+      "messageId": "msg.lease.error_handling.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58.2026-05-20T06-05-58.5266",
+      "type": "human_decision_required",
+      "fromLease": "lease.error_handling.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58",
+      "toLease": "broadcast",
+      "summary": "Lease lease.error_handling.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58 finished wave 1 as awaiting_input (0 file change(s)).",
+      "impact": "informational",
+      "requiresAck": false,
+      "status": "pending_ack",
+      "createdAt": "2026-05-20T06:05:58.967Z",
+      "metadata": {
+        "provider": "embedded",
+        "waveNumber": "1",
+        "filesChanged": []
+      }
+    },
+    {
+      "messageId": "msg.lease.functionality.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57.2026-05-20T06-05-58.2340",
+      "type": "human_decision_required",
+      "fromLease": "lease.functionality.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57",
+      "toLease": "broadcast",
+      "summary": "Lease lease.functionality.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57 finished wave 1 as awaiting_input (0 file change(s)).",
+      "impact": "informational",
+      "requiresAck": false,
+      "status": "pending_ack",
+      "createdAt": "2026-05-20T06:05:58.965Z",
+      "metadata": {
+        "provider": "embedded",
+        "waveNumber": "1",
+        "filesChanged": []
+      }
+    },
+    {
+      "messageId": "msg.lease.security.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58.2026-05-20T06-05-58.3218",
+      "type": "human_decision_required",
+      "fromLease": "lease.security.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58",
+      "toLease": "broadcast",
+      "summary": "Lease lease.security.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58 finished wave 1 as awaiting_input (0 file change(s)).",
+      "impact": "informational",
+      "requiresAck": false,
+      "status": "pending_ack",
+      "createdAt": "2026-05-20T06:05:58.967Z",
+      "metadata": {
+        "provider": "embedded",
+        "waveNumber": "1",
+        "filesChanged": []
+      }
+    },
+    {
+      "messageId": "msg.lease.testing.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57.2026-05-20T06-05-58.5299",
+      "type": "human_decision_required",
+      "fromLease": "lease.testing.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57",
+      "toLease": "broadcast",
+      "summary": "Lease lease.testing.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57 finished wave 1 as awaiting_input (0 file change(s)).",
+      "impact": "informational",
+      "requiresAck": false,
+      "status": "pending_ack",
+      "createdAt": "2026-05-20T06:05:58.966Z",
+      "metadata": {
+        "provider": "embedded",
+        "waveNumber": "1",
+        "filesChanged": []
+      }
+    }
+  ]
+}

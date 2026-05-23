@@ -2,6 +2,7 @@
 
 import warnings
 from dataclasses import asdict, dataclass
+from pathlib import Path
 from typing import Any, Dict, Optional
 
 from dojo.core.evidence import EvidenceLogger, EvidenceType
@@ -19,6 +20,7 @@ class StreamResult:
     source_tier: str
     status: str
     device: Optional[str] = None
+    bytes_streamed: int = 0
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -103,7 +105,12 @@ class WeightStreamer:
         except Exception as e:
             raise WeightStreamerError(f"load_model failed: {e}") from e
 
-    def stream_layer(self, layer_id: str, source_tier: str = "disk") -> StreamResult:
+    def stream_layer(
+        self,
+        layer_id: str,
+        source_tier: str = "disk",
+        path: Optional[Path] = None,
+    ) -> StreamResult:
         if not layer_id:
             raise WeightStreamerError("layer_id cannot be empty")
         if source_tier not in self.SUPPORTED_TIERS:
@@ -112,11 +119,25 @@ class WeightStreamer:
             self._sovereign.trigger_halt("VRAM residency breach")
             raise WeightStreamerError("VRAM residency breach: attempted to load >1 layer into VRAM")
 
+        # Real disk I/O: stream the file in 1 MiB chunks, measuring bytes.
+        bytes_streamed = 0
+        if source_tier in {"disk", "ssd"} and path is not None and path.exists():
+            _chunk = 1 << 20  # 1 MiB
+            try:
+                with path.open("rb") as fh:
+                    while True:
+                        chunk = fh.read(_chunk)
+                        if not chunk:
+                            break
+                        bytes_streamed += len(chunk)
+            except OSError:
+                bytes_streamed = 0
+
         if self.mock_mode:
             self._layers_streamed += 1
             self.active_layer = layer_id
             self._sovereign.seal_operation({"organ": "WeightStreamer", "op": "stream_layer"})
-            result = StreamResult(layer_id=layer_id, source_tier=source_tier, status="LayerReady")
+            result = StreamResult(layer_id=layer_id, source_tier=source_tier, status="LayerReady", bytes_streamed=bytes_streamed)
             self.evidence.info({"type": EvidenceType.LAYER_STREAM_LOADED.value, "data": result.to_dict()}, organ="stream")
             return result
 
@@ -131,7 +152,7 @@ class WeightStreamer:
             self._layers_streamed += 1
             self.active_layer = layer_id
             self._sovereign.seal_operation({"organ": "WeightStreamer", "op": "stream_layer"})
-            result = StreamResult(layer_id=layer_id, source_tier=source_tier, status="LayerReady", device=str(target))
+            result = StreamResult(layer_id=layer_id, source_tier=source_tier, status="LayerReady", device=str(target), bytes_streamed=bytes_streamed)
             self.evidence.info({"type": EvidenceType.LAYER_STREAM_LOADED.value, "data": result.to_dict()}, organ="stream")
             return result
         except WeightStreamerError:

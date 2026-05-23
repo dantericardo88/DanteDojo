@@ -66,9 +66,9 @@ def test_stream_layer_called_with_full_model_disk(model_file, fake_llama_cpp):
     calls = []
     original = runner._weight_streamer.stream_layer
 
-    def spy(layer_id, source_tier="disk"):
+    def spy(layer_id, source_tier="disk", **kwargs):
         calls.append((layer_id, source_tier))
-        return original(layer_id, source_tier)
+        return original(layer_id, source_tier, **kwargs)
 
     runner._weight_streamer.stream_layer = spy
     runner.load()
@@ -200,3 +200,48 @@ def test_prefetch_issue_contains_embed_and_lm_head(model_file, fake_llama_cpp):
 
     assert "embed" in captured
     assert "lm_head" in captured
+
+
+# ---------------------------------------------------------------------------
+# Test 11+12: bytes_streamed — real I/O when model file exists
+# ---------------------------------------------------------------------------
+
+def test_stream_layer_bytes_streamed_with_real_file(tmp_path):
+    """WeightStreamer.stream_layer() counts real bytes when path exists."""
+    model = tmp_path / "model.gguf"
+    content = b"GGUF" * 256  # 1024 bytes
+    model.write_bytes(content)
+
+    ws = WeightStreamer(mock_mode=True)
+    result = ws.stream_layer("full_model", source_tier="disk", path=model)
+    assert result.bytes_streamed == len(content)
+
+
+def test_stream_layer_bytes_streamed_zero_no_file():
+    """WeightStreamer.stream_layer() reports bytes_streamed=0 when no path given."""
+    ws = WeightStreamer(mock_mode=True)
+    result = ws.stream_layer("full_model", source_tier="disk")
+    assert result.bytes_streamed == 0
+
+
+def test_load_triggers_real_io_when_model_exists(tmp_path, fake_llama_cpp):
+    """LocalGGUFRunner.load() passes model_path to stream_layer, proving real I/O tracking."""
+    model = tmp_path / "model.gguf"
+    model.write_bytes(b"GGUF" * 512)  # 2048 bytes
+
+    runner = LocalGGUFRunner(model_path=model)
+    results = []
+    original = runner._weight_streamer.stream_layer
+
+    def spy(layer_id, source_tier="disk", **kwargs):
+        r = original(layer_id, source_tier, **kwargs)
+        results.append(r)
+        return r
+
+    runner._weight_streamer.stream_layer = spy
+    runner.load()
+
+    assert results, "stream_layer must be called during load()"
+    assert results[0].bytes_streamed == 2048, (
+        f"Expected 2048 bytes from real file I/O, got {results[0].bytes_streamed}"
+    )

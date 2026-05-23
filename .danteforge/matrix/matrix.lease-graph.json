@@ -1,0 +1,133 @@
+{
+  "generatedAt": "2026-05-20T06:05:58.961Z",
+  "leases": [
+    {
+      "id": "lease.functionality.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57",
+      "workPacketId": "work.functionality.2026-05-20T06-05-34",
+      "provider": "embedded",
+      "agentRole": "dimension-engineer",
+      "branch": "matrix/functionality/embedded-06-05-57",
+      "worktreePath": "C:\\Projects\\DanteDojo\\.danteforge-worktrees\\lease.functionality.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57",
+      "allowedWritePaths": [],
+      "allowedReadPaths": [
+        "src/**",
+        "tests/**",
+        "docs/**"
+      ],
+      "forbiddenPaths": [
+        ".danteforge/compete/matrix.json",
+        ".danteforge/compete/matrix-*.json",
+        ".danteforge/compete/COMPETE_REPORT.md",
+        ".danteforge/scores/**",
+        ".danteforge/score-proposals/**"
+      ],
+      "requiredCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "budget": {
+        "maxTokens": 200000,
+        "maxRuntimeMinutes": 90,
+        "maxIterations": 3
+      },
+      "status": "pending",
+      "issuedAt": "2026-05-20T06:05:57.202Z"
+    },
+    {
+      "id": "lease.testing.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57",
+      "workPacketId": "work.testing.2026-05-20T06-05-34",
+      "provider": "embedded",
+      "agentRole": "dimension-engineer",
+      "branch": "matrix/testing/embedded-06-05-57",
+      "worktreePath": "C:\\Projects\\DanteDojo\\.danteforge-worktrees\\lease.testing.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57",
+      "allowedWritePaths": [],
+      "allowedReadPaths": [
+        "src/**",
+        "tests/**",
+        "docs/**"
+      ],
+      "forbiddenPaths": [
+        ".danteforge/compete/matrix.json",
+        ".danteforge/compete/matrix-*.json",
+        ".danteforge/compete/COMPETE_REPORT.md",
+        ".danteforge/scores/**",
+        ".danteforge/score-proposals/**"
+      ],
+      "requiredCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "budget": {
+        "maxTokens": 200000,
+        "maxRuntimeMinutes": 90,
+        "maxIterations": 3
+      },
+      "status": "pending",
+      "issuedAt": "2026-05-20T06:05:57.630Z"
+    },
+    {
+      "id": "lease.error_handling.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58",
+      "workPacketId": "work.error_handling.2026-05-20T06-05-34",
+      "provider": "embedded",
+      "agentRole": "dimension-engineer",
+      "branch": "matrix/error_handling/embedded-06-05-58",
+      "worktreePath": "C:\\Projects\\DanteDojo\\.danteforge-worktrees\\lease.error_handling.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58",
+      "allowedWritePaths": [],
+      "allowedReadPaths": [
+        "src/**",
+        "tests/**",
+        "docs/**"
+      ],
+      "forbiddenPaths": [
+        ".danteforge/compete/matrix.json",
+        ".danteforge/compete/matrix-*.json",
+        ".danteforge/compete/COMPETE_REPORT.md",
+        ".danteforge/scores/**",
+        ".danteforge/score-proposals/**"
+      ],
+      "requiredCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "budget": {
+        "maxTokens": 200000,
+        "maxRuntimeMinutes": 90,
+        "maxIterations": 3
+      },
+      "status": "pending",
+      "issuedAt": "2026-05-20T06:05:58.037Z"
+    },
+    {
+      "id": "lease.security.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58",
+      "workPacketId": "work.security.2026-05-20T06-05-34",
+      "provider": "embedded",
+      "agentRole": "dimension-engineer",
+      "branch": "matrix/security/embedded-06-05-58",
+      "worktreePath": "C:\\Projects\\DanteDojo\\.danteforge-worktrees\\lease.security.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58",
+      "allowedWritePaths": [],
+      "allowedReadPaths": [
+        "src/**",
+        "tests/**",
+        "docs/**"
+      ],
+      "forbiddenPaths": [
+        ".danteforge/compete/matrix.json",
+        ".danteforge/compete/matrix-*.json",
+        ".danteforge/compete/COMPETE_REPORT.md",
+        ".danteforge/scores/**",
+        ".danteforge/score-proposals/**"
+      ],
+      "requiredCommands": [
+        "npm run typecheck",
+        "npm test"
+      ],
+      "budget": {
+        "maxTokens": 200000,
+        "maxRuntimeMinutes": 90,
+        "maxIterations": 3
+      },
+      "status": "pending",
+      "issuedAt": "2026-05-20T06:05:58.490Z"
+    }
+  ]
+}

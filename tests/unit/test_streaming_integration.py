@@ -103,12 +103,12 @@ class TestLayerStreamingInferenceLoopIntegration:
 
         concurrent_count = [0]
 
-        def tracking_stream(layer_id, source_tier="disk"):
+        def tracking_stream(layer_id, source_tier="disk", **kwargs):
             concurrent_count[0] += 1
             nonlocal max_concurrent
             if concurrent_count[0] > max_concurrent:
                 max_concurrent = concurrent_count[0]
-            return original_stream(layer_id, source_tier)
+            return original_stream(layer_id, source_tier, **kwargs)
 
         def tracking_evict():
             result = original_evict()

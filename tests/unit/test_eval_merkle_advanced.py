@@ -229,15 +229,16 @@ class TestContaminationEmbeddedInReceipt:
 # ---------------------------------------------------------------------------
 
 class TestLmEvalTaskCatalogCompleteness:
-    def test_catalog_has_eight_standard_tasks(self):
-        """LM_EVAL_STANDARD_TASKS contains exactly 8 canonical tasks."""
-        assert len(LM_EVAL_STANDARD_TASKS) == 8
+    def test_catalog_has_eleven_standard_tasks(self):
+        """LM_EVAL_STANDARD_TASKS contains exactly 11 canonical tasks."""
+        assert len(LM_EVAL_STANDARD_TASKS) == 11
 
     def test_all_expected_tasks_present(self):
-        """All eight expected task names are registered in the catalog."""
+        """All expected task names are registered in the catalog."""
         expected = {
-            "mmlu", "hellaswag", "arc_challenge", "winogrande",
-            "truthfulqa_mc2", "boolq", "gsm8k", "lambada_openai",
+            "mmlu", "hellaswag", "arc_easy", "arc_challenge", "winogrande",
+            "truthfulqa_mc1", "truthfulqa_mc2", "boolq", "gsm8k",
+            "math_hard", "lambada_openai",
         }
         assert set(LM_EVAL_STANDARD_TASKS.keys()) == expected
 

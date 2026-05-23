@@ -1,0 +1,49 @@
+{
+  "generatedAt": "2026-05-20T06:05:58.963Z",
+  "runs": [
+    {
+      "runId": "embeddedrun.lease.functionality.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57.1779257158957",
+      "leaseId": "lease.functionality.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57",
+      "status": "awaiting_input",
+      "filesChanged": [],
+      "commandsExecuted": [],
+      "startedAt": "2026-05-20T06:05:58.957Z",
+      "completedAt": "2026-05-20T06:05:58.961Z",
+      "finalMessage": "Embedded instruction packet written: C:\\Projects\\DanteDojo\\.danteforge\\embedded-mode\\lease.functionality.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57\\work-instruction.md. Awaiting host to execute and call `danteforge matrix-kernel embedded-complete lease.functionality.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57`.",
+      "provider": "embedded"
+    },
+    {
+      "runId": "embeddedrun.lease.testing.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57.1779257158958",
+      "leaseId": "lease.testing.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57",
+      "status": "awaiting_input",
+      "filesChanged": [],
+      "commandsExecuted": [],
+      "startedAt": "2026-05-20T06:05:58.958Z",
+      "completedAt": "2026-05-20T06:05:58.961Z",
+      "finalMessage": "Embedded instruction packet written: C:\\Projects\\DanteDojo\\.danteforge\\embedded-mode\\lease.testing.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57\\work-instruction.md. Awaiting host to execute and call `danteforge matrix-kernel embedded-complete lease.testing.2026-05-20T06-05-34.embedded.2026-05-20T06-05-57`.",
+      "provider": "embedded"
+    },
+    {
+      "runId": "embeddedrun.lease.error_handling.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58.1779257158958",
+      "leaseId": "lease.error_handling.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58",
+      "status": "awaiting_input",
+      "filesChanged": [],
+      "commandsExecuted": [],
+      "startedAt": "2026-05-20T06:05:58.958Z",
+      "completedAt": "2026-05-20T06:05:58.961Z",
+      "finalMessage": "Embedded instruction packet written: C:\\Projects\\DanteDojo\\.danteforge\\embedded-mode\\lease.error_handling.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58\\work-instruction.md. Awaiting host to execute and call `danteforge matrix-kernel embedded-complete lease.error_handling.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58`.",
+      "provider": "embedded"
+    },
+    {
+      "runId": "embeddedrun.lease.security.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58.1779257158958",
+      "leaseId": "lease.security.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58",
+      "status": "awaiting_input",
+      "filesChanged": [],
+      "commandsExecuted": [],
+      "startedAt": "2026-05-20T06:05:58.958Z",
+      "completedAt": "2026-05-20T06:05:58.961Z",
+      "finalMessage": "Embedded instruction packet written: C:\\Projects\\DanteDojo\\.danteforge\\embedded-mode\\lease.security.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58\\work-instruction.md. Awaiting host to execute and call `danteforge matrix-kernel embedded-complete lease.security.2026-05-20T06-05-34.embedded.2026-05-20T06-05-58`.",
+      "provider": "embedded"
+    }
+  ]
+}

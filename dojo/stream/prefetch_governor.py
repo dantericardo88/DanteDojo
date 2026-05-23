@@ -131,6 +131,18 @@ class PrefetchGovernor:
     def get_stats(self) -> Dict[str, int]:
         return {"prefetches_issued": self._prefetches_issued, "pending_count": len(self.pending)}
 
+    def prefetch_hit_rate(self) -> float:
+        """Return fraction of issued prefetches that have been consumed (0.0–1.0).
+
+        A hit = a layer that was prefetched AND later consumed by inference.
+        Consumed = issued - currently pending.
+        Returns 0.0 if nothing has been issued yet.
+        """
+        if self._prefetches_issued == 0:
+            return 0.0
+        consumed = self._prefetches_issued - len(self.pending)
+        return round(consumed / self._prefetches_issued, 4)
+
     def simulate_512_token_inference(
         self,
         layers_per_step: int = 3,

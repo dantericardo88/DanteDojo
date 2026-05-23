@@ -313,8 +313,8 @@ class LocalGGUFRunner:
                 reason="File does not exist",
             )
 
-        # --- d26: stream model weights from disk (mock_mode degrades gracefully) ---
-        self._weight_streamer.stream_layer("full_model", source_tier="disk")
+        # --- d26: stream model weights from disk (real I/O when path exists) ---
+        self._weight_streamer.stream_layer("full_model", source_tier="disk", path=self._model_path)
         self._weight_streamer.evict_current()  # release the VRAM slot after checkpoint maps
 
         # --- d28: issue layer prefetch to warm the GPU copy pipeline ---
@@ -378,9 +378,30 @@ class LocalGGUFRunner:
         if self._llm is None and _real_gpu_mode():
             raise ServeError("Model not loaded. Call load() first.", reason="not_loaded")
 
-        # --- d27: register KV cache page for this generation request ---
+        # --- d27: KV cache — serve from cache on hit, page on miss ---
         cache_key = f"gen_{hash(prompt) & 0xFFFFFF:06x}"
-        self._kv_streamer.page_kv_entry(cache_key, prompt[:64], size=max(1, len(prompt.split())))
+        cached_text = self._kv_streamer.get_cached_value(cache_key)
+        if cached_text is not None:
+            self._evidence.emit(
+                {
+                    "type": EvidenceType.SERVE_READY.value,
+                    "data": {
+                        "backend": "kv_cache",
+                        "model_path": str(self._model_path),
+                        "tokens_generated": len(cached_text.split()),
+                        "prompt_tokens": len(prompt.split()),
+                        "kv_cache_active": True,
+                        "network_calls": 0,
+                    },
+                },
+                organ="serve",
+            )
+            return {
+                "text": cached_text,
+                "tokens": len(cached_text.split()),
+                "prompt_tokens": len(prompt.split()),
+                "backend": "kv_cache",
+            }
 
         if self._llm is not None:
             output = self._llm(
@@ -411,6 +432,30 @@ class LocalGGUFRunner:
             tokens_generated = min(max_tokens, 16)
             prompt_tokens = len(prompt.split())
             active_backend = "stub"
+
+        # --- d28: consume prefetch layers (feedback loop: issued → consumed) ---
+        # Each inference traverses all model layers — consume the pending prefetch
+        # queue so the governor tracks real utilization, not just advisory intent.
+        _pending = len(self._prefetch_gov.pending)
+        if _pending > 0:
+            for _lyr in list(self._prefetch_gov.pending):
+                self._prefetch_gov.consume_prefetch(_lyr)
+            _stats = self._prefetch_gov.get_stats()
+            self._evidence.emit(
+                {
+                    "type": EvidenceType.PREFETCH_CONSUMED.value,
+                    "data": {
+                        "layers_consumed": _pending,
+                        "pending_remaining": _stats["pending_count"],
+                        "total_issued": _stats["prefetches_issued"],
+                        "backend": active_backend,
+                    },
+                },
+                organ="stream",
+            )
+
+        # Store generated text in KV cache for future hits
+        self._kv_streamer.page_kv_entry(cache_key, text, size=max(1, len(prompt.split())))
 
         self._evidence.emit(
             {

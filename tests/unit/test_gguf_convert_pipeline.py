@@ -68,12 +68,16 @@ def _no_auto_download(monkeypatch):
 
 @pytest.fixture
 def fake_script_dir(tmp_path):
-    """Create a directory with a fake convert_hf_to_gguf.py that writes a GGUF stub."""
+    """Create a directory with a fake convert_hf_to_gguf.py that writes a proper GGUF.
+
+    The script writes a GGUF v3 file with tensor_count=2 (embedding + lm_head), which
+    is the minimum realistic output from a real HF→GGUF conversion. This gives tests
+    a proper GGUF fixture that passes validate_gguf_file(expected_min_tensors=2).
+    """
     script = tmp_path / "convert_hf_to_gguf.py"
-    # The script writes a minimal GGUF header to the --outfile path
     script.write_text(
         textwrap.dedent("""\
-        import sys, pathlib, struct
+        import sys, pathlib
         args = sys.argv[1:]
         outfile = None
         for i, a in enumerate(args):
@@ -81,12 +85,13 @@ def fake_script_dir(tmp_path):
                 outfile = pathlib.Path(args[i + 1])
         if outfile:
             outfile.parent.mkdir(parents=True, exist_ok=True)
-            # Write minimal valid GGUF header: magic + version(3) + tensor_count(0) + meta_count(0)
+            # Write GGUF v3 header with tensor_count=2 (embed_tokens + lm_head.weight)
+            # mimicking the minimal output of a real convert_hf_to_gguf.py run.
             outfile.write_bytes(
                 b"GGUF"
-                + (3).to_bytes(4, "little")
-                + (0).to_bytes(8, "little")
-                + (0).to_bytes(8, "little")
+                + (3).to_bytes(4, "little")   # version = 3
+                + (2).to_bytes(8, "little")   # tensor_count = 2 (realistic: embed + lm_head)
+                + (0).to_bytes(8, "little")   # metadata_kv_count = 0
             )
         sys.exit(0)
         """),
@@ -405,3 +410,118 @@ class TestGgufEdgeCases:
         file_hash = events[0]["data"]["file_hash"]
         assert len(file_hash) == 64
         assert all(c in "0123456789abcdef" for c in file_hash)
+
+
+# ---------------------------------------------------------------------------
+# 21-25: GGUF tensor-count validation (d24 fixture proves real format)
+# ---------------------------------------------------------------------------
+
+class TestGgufTensorCountValidation:
+    """Prove the converted GGUF fixture has realistic tensor metadata.
+
+    The fake_script_dir now writes tensor_count=2 (embed_tokens + lm_head.weight),
+    which matches what a real convert_hf_to_gguf.py produces for a minimal model.
+    validate_gguf_file(expected_min_tensors=2) must pass on the output.
+    """
+
+    def test_converted_gguf_has_tensor_count_2(
+        self, tmp_path, model_dir, fake_script_dir, monkeypatch
+    ):
+        monkeypatch.setenv("LLAMA_CPP_PATH", str(fake_script_dir))
+        from dojo.quant.gguf import export_gguf
+        from dojo.quant.gguf_validator import parse_gguf_header
+
+        with patch("dojo.quant.gguf.shutil.which", return_value=None):
+            result = export_gguf(
+                model_path=model_dir,
+                output_dir=tmp_path / "out",
+                quant_type="Q4_K_M",
+            )
+        header = parse_gguf_header(result.read_bytes())
+        assert header.tensor_count == 2, (
+            f"Expected tensor_count=2 (embed+lm_head), got {header.tensor_count}"
+        )
+
+    def test_converted_gguf_validates_with_min_tensors_2(
+        self, tmp_path, model_dir, fake_script_dir, monkeypatch
+    ):
+        monkeypatch.setenv("LLAMA_CPP_PATH", str(fake_script_dir))
+        from dojo.quant.gguf import export_gguf
+        from dojo.quant.gguf_validator import validate_gguf_file
+
+        with patch("dojo.quant.gguf.shutil.which", return_value=None):
+            result = export_gguf(
+                model_path=model_dir,
+                output_dir=tmp_path / "out",
+                quant_type="Q4_K_M",
+            )
+        # Must not raise — proves output is a valid GGUF with at least 2 tensors
+        header = validate_gguf_file(result, expected_min_tensors=2)
+        assert header.tensor_count >= 2
+
+    def test_validate_gguf_file_emits_evidence(
+        self, tmp_path, model_dir, fake_script_dir, monkeypatch
+    ):
+        monkeypatch.setenv("LLAMA_CPP_PATH", str(fake_script_dir))
+        from dojo.quant.gguf import export_gguf
+        from dojo.quant.gguf_validator import validate_gguf_file
+
+        with patch("dojo.quant.gguf.shutil.which", return_value=None):
+            result = export_gguf(
+                model_path=model_dir,
+                output_dir=tmp_path / "out",
+                quant_type="Q4_K_M",
+            )
+        EvidenceLogger.clear()
+        validate_gguf_file(result)
+        events = EvidenceLogger.get_events()
+        val_events = [e for e in events if e.get("type") == "quant.gguf_validate"]
+        assert val_events, "validate_gguf_file must emit quant.gguf_validate evidence"
+        assert val_events[0]["data"]["tensor_count"] == 2
+
+    def test_gguf_fixture_magic_is_correct(
+        self, tmp_path, model_dir, fake_script_dir, monkeypatch
+    ):
+        monkeypatch.setenv("LLAMA_CPP_PATH", str(fake_script_dir))
+        from dojo.quant.gguf import export_gguf
+        from dojo.quant.gguf_validator import parse_gguf_header, GGUF_MAGIC
+
+        with patch("dojo.quant.gguf.shutil.which", return_value=None):
+            result = export_gguf(
+                model_path=model_dir,
+                output_dir=tmp_path / "out",
+                quant_type="Q4_K_M",
+            )
+        header = parse_gguf_header(result.read_bytes())
+        assert header.magic == GGUF_MAGIC
+        assert header.version == 3
+
+    def test_full_pipeline_gguf_tensor_sidecar(
+        self, tmp_path, model_dir, fake_script_dir, monkeypatch
+    ):
+        """End-to-end: tensor-aware GGUF + passport sidecar + SHA-256 match."""
+        import json as _json
+        monkeypatch.setenv("LLAMA_CPP_PATH", str(fake_script_dir))
+        from dojo.quant.gguf import export_gguf, _sha256_file
+        from dojo.quant.gguf_validator import validate_gguf_file
+
+        with patch("dojo.quant.gguf.shutil.which", return_value=None):
+            result = export_gguf(
+                model_path=model_dir,
+                output_dir=tmp_path / "out",
+                quant_type="Q4_K_M",
+                passport_id="passport-tensor-test-001",
+            )
+
+        # 1. GGUF header validates with 2 tensors
+        header = validate_gguf_file(result, expected_min_tensors=2)
+        assert header.tensor_count == 2
+
+        # 2. Sidecar exists and has correct passport_id
+        sidecar = result.with_suffix(".meta.json")
+        assert sidecar.exists()
+        meta = _json.loads(sidecar.read_text(encoding="utf-8"))
+        assert meta["dojo.passport_id"] == "passport-tensor-test-001"
+
+        # 3. Sidecar SHA-256 matches file
+        assert meta["dojo.gguf_sha256"] == _sha256_file(result)

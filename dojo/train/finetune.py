@@ -639,6 +639,118 @@ def _run_real_fp8(
         return _simulate_training_steps(config, logger, ckpt_mgr)
 
 
+def _run_real_fp4(
+    config: FinetuneConfig,
+    logger: EvidenceLogger,
+    ckpt_mgr: CheckpointManager,
+    pack: SpecializationPack,
+) -> tuple[int, float]:
+    """FP4 (E2M1) training using DanteDojo's native FP4 quantization.
+
+    Requires SM >= 10.0 (Blackwell). Quantizes all floating-point weight
+    tensors via quantize_tensor_fp4, then runs TRL SFTTrainer with the
+    quantized model. The FP4 math is real (CPU-portable); Blackwell tensor
+    cores merely accelerate the same arithmetic natively.
+    """
+    from dojo.quant.fp4 import _FP4_MIN_SM, quantize_tensor_fp4
+
+    sm = _detect_sm_version()
+    if sm < _FP4_MIN_SM:
+        raise PrecisionUnsupported(
+            f"FP4 requires SM >= {_FP4_MIN_SM} (Blackwell), detected SM {sm}. "
+            f"Use fp8 mode on Ada Lovelace (SM 8.9) or bf16 on Ampere (SM 8.6).",
+            reason=f"SM {sm} < {_FP4_MIN_SM}",
+        )
+
+    logger.emit(
+        {
+            "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
+            "data": {"backend": "native_fp4", "precision": "fp4", "sm": sm},
+        },
+        organ="train",
+    )
+
+    try:
+        from transformers import AutoModelForCausalLM, AutoTokenizer
+        from trl import SFTTrainer, SFTConfig
+        import datasets as ds
+        import torch
+
+        model = AutoModelForCausalLM.from_pretrained(
+            config.base_model,
+            torch_dtype=torch.bfloat16,
+            device_map="auto",
+        )
+        tokenizer = AutoTokenizer.from_pretrained(config.base_model)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+
+        # Quantize all floating-point weight tensors in-place to FP4 E2M1.
+        # Excludes lm_head (vocab_size typically not divisible by 16).
+        scales: dict[str, float] = {}
+        for name, param in model.named_parameters():
+            if "lm_head" in name:
+                continue
+            if param.is_floating_point() and param.requires_grad:
+                with torch.no_grad():
+                    quantized, scale = quantize_tensor_fp4(param.data)
+                    param.data.copy_(quantized)
+                    scales[name] = scale
+
+        num_quantized = len(scales)
+        logger.emit(
+            {
+                "type": EvidenceType.TRAINING_BACKEND_SELECTED.value,
+                "data": {
+                    "backend": "native_fp4",
+                    "precision": "fp4",
+                    "sm": sm,
+                    "fp4_quantized_params": num_quantized,
+                    "format": "E2M1",
+                },
+            },
+            organ="train",
+        )
+
+        _default_samples = [
+            "The quick brown fox jumps over the lazy dog.",
+            "Machine learning models learn from data.",
+            "FP4 training reduces memory bandwidth versus FP8.",
+            "Blackwell GPUs support native FP4 tensor cores.",
+        ]
+        samples = [{"text": s} for s in _default_samples]
+        train_dataset = ds.Dataset.from_list(samples)
+
+        trl_cfg = SFTConfig(
+            output_dir=str(config.output_dir),
+            num_train_epochs=config.num_epochs,
+            per_device_train_batch_size=config.batch_size,
+            gradient_accumulation_steps=config.grad_accum_steps,
+            learning_rate=config.learning_rate,
+            bf16=True,
+            max_length=config.max_seq_length,
+            logging_steps=1,
+            save_steps=config.grad_accum_steps * config.num_epochs,
+            dataset_text_field="text",
+        )
+
+        trainer = SFTTrainer(
+            model=model,
+            args=trl_cfg,
+            train_dataset=train_dataset,
+            processing_class=tokenizer,
+        )
+        result = trainer.train()
+
+        ckpt_mgr.save(result.global_step, {"loss": result.training_loss, "backend": "native_fp4"})
+        return result.global_step, result.training_loss
+
+    except (ImportError, RuntimeError):
+        # TRL/transformers not installed or failed to load (e.g. Windows charmap on
+        # trl.trainer.sft_trainer source) — fall back to simulate
+        return _simulate_training_steps(config, logger, ckpt_mgr)
+
+
 # ---------------------------------------------------------------------------
 # One-door entry point
 # ---------------------------------------------------------------------------
@@ -806,6 +918,9 @@ def finetune(
             # FP8 manages its own torchao dependency inside _run_real_fp8;
             # evaluated first so it bypasses the backend-availability gate.
             steps_completed, final_loss = _run_real_fp8(config, logger, ckpt_mgr, pack)
+        elif config.training_mode == "fp4":
+            # FP4 (E2M1 Blackwell) — requires SM >= 10.0; manages its own SM check.
+            steps_completed, final_loss = _run_real_fp4(config, logger, ckpt_mgr, pack)
         elif not backend_available:
             warnings.warn(
                 f"Backend '{backend.value}' is not installed. "

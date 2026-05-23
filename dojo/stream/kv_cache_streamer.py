@@ -46,6 +46,7 @@ class KVCacheStreamer:
         self._torch: Any = None
         self._cache_tensors: Dict[str, Any] = {}
         self._cache_devices: Dict[str, str] = {}
+        self._cache_values: Dict[str, str] = {}
         # Ordered dict tracks insertion order for eviction (oldest-first)
         self._cache_sizes: OrderedDict[str, int] = OrderedDict()
         self._init_backend()
@@ -74,6 +75,7 @@ class KVCacheStreamer:
             self._pages_stored += 1
             self._cache_devices[key] = "cpu"
             self._cache_sizes[key] = size
+            self._cache_values[key] = value
             self._sovereign.seal_operation({"organ": "KVCacheStreamer", "op": "page_kv_entry"})
             result = KVPageResult(key=key, size=size, status="KVReady")
             self.evidence.info({"type": EvidenceType.KV_PAGE_STORED.value, "data": result.to_dict()}, organ="stream")
@@ -83,6 +85,7 @@ class KVCacheStreamer:
             self._cache_tensors[key] = self._torch.zeros(size, dtype=self._torch.float16)
             self._cache_devices[key] = "cpu"
             self._cache_sizes[key] = size
+            self._cache_values[key] = value
             self.current_size += size
             self._pages_stored += 1
             self._sovereign.seal_operation({"organ": "KVCacheStreamer", "op": "page_kv_entry"})
@@ -131,6 +134,22 @@ class KVCacheStreamer:
     def get_cache_devices(self) -> Dict[str, str]:
         return dict(self._cache_devices)
 
+    def get_cached_value(self, key: str) -> Optional[str]:
+        """Return the cached string value for key, or None on cache miss.
+
+        Emits KV_PAGE_HIT evidence on a hit so callers can audit cache reuse.
+        """
+        value = self._cache_values.get(key)
+        if value is not None:
+            self.evidence.info(
+                {
+                    "type": EvidenceType.KV_PAGE_HIT.value,
+                    "data": {"key": key, "size": self._cache_sizes.get(key, 0)},
+                },
+                organ="stream",
+            )
+        return value
+
     def evict_oldest(self, n: int = 1) -> int:
         """Evict the n oldest KV cache entries (by insertion order).
 
@@ -142,6 +161,7 @@ class KVCacheStreamer:
             oldest_key, oldest_size = next(iter(self._cache_sizes.items()))
             del self._cache_sizes[oldest_key]
             self._cache_devices.pop(oldest_key, None)
+            self._cache_values.pop(oldest_key, None)
             if not self.mock_mode:
                 self._cache_tensors.pop(oldest_key, None)
             self.current_size = max(0, self.current_size - oldest_size)
