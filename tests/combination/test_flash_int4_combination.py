@@ -77,6 +77,8 @@ class TestFlashInt4Combination:
             "Interaction must be classified (not UNKNOWN)"
         )
         assert result.elapsed_s > 0
+        assert result.description != "", "Result must carry plain-English description"
+        assert pair.technique_a in result.description
 
         # Evidence chain must be sealed
         events = EvidenceLogger.get_events()
@@ -99,6 +101,8 @@ class TestFlashInt4Combination:
         print(f"  Synergy score:            {result.synergy_score:+.4f}")
         print(f"  Elapsed:                  {result.elapsed_s:.1f}s")
         print(f"  Evidence events:          {len(events)}")
+        print(f"\n=== Interaction Explanation ===")
+        print(result.description)
 
     def test_all_four_measurements_are_positive(self):
         """All 4 configurations must produce valid positive tps measurements.

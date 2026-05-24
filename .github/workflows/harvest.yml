@@ -1,0 +1,69 @@
+name: arXiv Research Harvest
+
+on:
+  schedule:
+    - cron: '0 6 * * *'       # daily 6am UTC
+  workflow_dispatch:
+    inputs:
+      queries:
+        description: 'Comma-separated queries'
+        required: false
+        default: 'quantization,flash attention,LoRA,GRPO,vLLM,speculative decoding'
+
+permissions:
+  contents: write
+
+jobs:
+  harvest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install DanteDojo
+        run: pip install -e . --quiet
+
+      - name: Run arXiv harvest
+        id: harvest
+        run: |
+          python - <<'EOF'
+          from dojo.research.harvest_loop import run_harvest
+          from pathlib import Path
+          import json, os
+
+          queries_env = os.environ.get("HARVEST_QUERIES", "")
+          queries = [q.strip() for q in queries_env.split(",") if q.strip()] or [
+              "quantization", "flash attention", "LoRA fine-tuning",
+              "GRPO reinforcement learning", "vLLM serving", "speculative decoding",
+          ]
+          result = run_harvest(
+              queries=queries,
+              output_dir=Path("tests/research"),
+              max_results_per_query=5,
+              emit_evidence=True,
+          )
+          print(f"papers_scanned={result.papers_scanned}")
+          print(f"claims_extracted={result.claims_extracted}")
+          print(f"stubs_generated={result.stubs_generated}")
+          with open(os.environ.get("GITHUB_OUTPUT", "/dev/null"), "a") as f:
+              f.write(f"papers_scanned={result.papers_scanned}\n")
+              f.write(f"claims_extracted={result.claims_extracted}\n")
+              f.write(f"stubs_generated={result.stubs_generated}\n")
+          EOF
+        env:
+          HARVEST_QUERIES: ${{ github.event.inputs.queries || 'quantization,flash attention,LoRA,GRPO,vLLM,speculative decoding' }}
+
+      - name: Commit generated stubs
+        if: steps.harvest.outputs.stubs_generated != '0'
+        run: |
+          git config user.name  "DanteDojo Harvest Bot"
+          git config user.email "harvest@dantedojo.ai"
+          git add tests/research/ || true
+          git diff --cached --quiet || git commit -m \
+            "chore(harvest): auto-generated stubs from arXiv scan $(date -u +%Y-%m-%d) — ${{ steps.harvest.outputs.claims_extracted }} claims"
+          git push || true

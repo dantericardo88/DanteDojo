@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from dojo.core.evidence import EvidenceLogger
-from dojo.research.interaction_model import InteractionEffect, classify_interaction
+from dojo.research.interaction_model import InteractionEffect, classify_interaction, describe_interaction
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +49,7 @@ class CombinationResult:
     gpu: str = ""
     error: str = ""
     success: bool = True
+    description: str = ""  # plain-English explanation filled by run()
 
 
 # ---------------------------------------------------------------------------
@@ -179,6 +180,11 @@ class CombinationComposer:
             synergy = gain_combined - (gain_a + gain_b)
 
             elapsed = time.monotonic() - t0
+            description = describe_interaction(
+                bl, a_n, b_n, c_n,
+                pair.technique_a, pair.technique_b,
+                pair.metric, pair.higher_is_better,
+            )
             result = CombinationResult(
                 pair=pair,
                 baseline=baseline,
@@ -189,6 +195,7 @@ class CombinationComposer:
                 synergy_score=round(synergy, 4),
                 elapsed_s=round(elapsed, 1),
                 success=True,
+                description=description,
             )
 
             self._emit("COMBINATION_INTERACTION_CLASSIFIED", {
@@ -203,6 +210,7 @@ class CombinationComposer:
                 "interaction": effect.value,
                 "synergy_score": result.synergy_score,
                 "elapsed_s": elapsed,
+                "description": description,
             })
 
             return result

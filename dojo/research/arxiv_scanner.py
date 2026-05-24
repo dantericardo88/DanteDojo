@@ -16,6 +16,7 @@ from typing import Any, Optional
 
 _ARXIV_API = "https://export.arxiv.org/api/query"
 _NS = {"atom": "http://www.w3.org/2005/Atom", "arxiv": "http://arxiv.org/schemas/atom"}
+_ML_CATS = "cat:cs.LG OR cat:cs.CL OR cat:cs.AI OR cat:cs.CV OR cat:cs.NE OR cat:cs.AR"
 
 
 @dataclass
@@ -50,7 +51,7 @@ def search(
         List of ArxivPaper records, ordered by *sort_by/sort_order*.
     """
     params = urllib.parse.urlencode({
-        "search_query": f"ti:{query} OR abs:{query}",
+        "search_query": f"(ti:{query} OR abs:{query}) AND ({_ML_CATS})",
         "start": 0,
         "max_results": max_results,
         "sortBy": sort_by,

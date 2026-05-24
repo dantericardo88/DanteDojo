@@ -12,6 +12,7 @@ CLI entry: dojo research scan --queries "quantization,flash attention"
 
 from __future__ import annotations
 
+import math
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -58,13 +59,23 @@ def run_harvest(
     seen_by_dim: dict[str, list[float]] = {}  # dim_id → improvement_pcts seen this run
 
     def _compute_novelty(claim: CapabilityClaim) -> float:
-        """Return novelty score in [0, 1] based on dimension coverage + improvement magnitude."""
+        """Return continuous novelty score in [0, 1].
+
+        Score = 1.0 for the first claim in a dimension.
+        Score = 0.5 + 0.5*tanh(2 * relative_improvement) for subsequent claims:
+          - Matches best seen  → ~0.5
+          - 50% better         → ~0.88
+          - Much worse         → ~0.07
+        """
         for dim in claim.dimension_ids:
             if dim not in seen_by_dim:
-                return 1.0  # first claim for this dimension = maximally novel
-            if claim.improvement_pct > max(seen_by_dim[dim], default=0.0):
-                return 0.8  # best improvement seen so far for this dimension
-        return 0.3  # dimension already covered with equal or better improvement
+                return 1.0
+            max_seen = max(seen_by_dim[dim], default=0.0)
+            if max_seen <= 0:
+                return 0.8
+            ratio = (claim.improvement_pct - max_seen) / max(abs(max_seen), 1.0)
+            return round(0.5 + 0.5 * math.tanh(ratio * 2), 4)
+        return 0.2  # all dimensions covered, claim ranks below best
 
     for query in queries:
         try:

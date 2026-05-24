@@ -1,11 +1,11 @@
 {
   "_meta": {
-    "version": "1.31.0",
+    "version": "1.32.0",
     "generated": "2026-05-24",
     "project": "DanteDojo",
     "scoring_scale": "0-10 (0=absent, 5=partial, 10=best-in-class)",
     "methodology": "Harsh self-assessment. GPU VALIDATED (evidence on file) = 9. Package installed + callsite wired + no gate + correct API = 7-8. CPU-emulation of GPU algorithm = max 5. Unit-tested but no real serving layer = max 7. Stub = 1-2. Constitutional uniqueness scored full credit where genuinely novel. Cloud providers get full hardware credit when underlying capability is real.",
-    "note": "v1.31.0: 2026-05-24. Research flywheel intelligence layer complete. GPU VALIDATED: Flash Attention (SDPA) + bitsandbytes NF4 INT4 combination test on RTX 4060 Laptop \u2014 SYNERGISTIC interaction, synergy_score=0.2409. baseline=445.9 tps, flash_attn=measured, int4=251.1 tps, combined classified. New: dojo/research/gpu_measurements.py (4 measurement callables), tests/combination/ (2 GPU-validated combination tests), claim_extractor.py Ollama LLM fallback (25 unit tests pass), harvest_loop.py novelty scoring (1.0/0.8/0.3 tiered by dim coverage). No score changes \u2014 all dims confirmed at honest ceilings. raw_total: 442/500 (88.4%). d50: user must push git tag for TestPyPI publish."
+    "note": "v1.32.0: 2026-05-24. Five quality gaps closed: (1) arXiv category filter \u2014 harvest now restricted to cs.LG/CL/AI/CV/NE/AR, returns only ML papers. (2) Combination test interpretability \u2014 describe_interaction() generates plain-English explanation of all 4 raw measurements + synergy delta; embedded in CombinationResult.description and evidence payload. (3) LoRA\u2192INT4 combination test \u2014 make_ppl_measurement_fns() + tests/combination/test_lora_gptq_combination.py; tests 'does fine-tuning survive quantization?' on sshleifer/tiny-gpt2 with peft LoRA + bitsandbytes INT4. (4) GitHub Actions harvest cron \u2014 .github/workflows/harvest.yml: daily 6am UTC + workflow_dispatch; auto-commits generated stubs. (5) Continuous novelty scoring \u2014 tanh formula replaces coarse 1.0/0.8/0.3 tiers: score = 0.5 + 0.5*tanh(2*ratio). 27 unit tests pass. No score changes \u2014 all dims confirmed at honest ceilings. raw_total: 442/500 (88.4%)."
   },
   "scores": {
     "dante_dojo": {

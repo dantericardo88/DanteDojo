@@ -15,6 +15,39 @@ def _clear_evidence():
     EvidenceLogger.clear()
 
 
+class TestArxivCategoryFilter:
+    """Verify the ML category filter is applied to all arXiv search queries."""
+
+    def test_search_query_contains_category_filter(self):
+        from unittest.mock import MagicMock, patch
+        import urllib.parse
+
+        captured_url = []
+
+        def mock_urlopen(req, context=None, timeout=None):
+            captured_url.append(req.full_url)
+            # Return minimal valid Atom feed
+            feed = b"""<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+</feed>"""
+            mock_resp = MagicMock()
+            mock_resp.read.return_value = feed
+            mock_resp.__enter__ = lambda s: s
+            mock_resp.__exit__ = MagicMock(return_value=False)
+            return mock_resp
+
+        with patch("urllib.request.urlopen", side_effect=mock_urlopen):
+            from dojo.research.arxiv_scanner import search
+            search("quantization", max_results=1)
+
+        assert captured_url, "urlopen was not called"
+        url = captured_url[0]
+        decoded = urllib.parse.unquote(url)
+        assert "cat:cs.LG" in decoded, (
+            f"arXiv search URL must include ML category filter (cat:cs.LG), got: {decoded}"
+        )
+
+
 class TestClaimExtractor:
     """Verify rule-based claim extraction from abstracts."""
 
@@ -274,26 +307,45 @@ class TestNoveltyScoring:
         gptq_claims = [c for c in result.claims if c.technique == "gptq"]
         assert len(gptq_claims) >= 2, f"Expected 2 GPTQ claims, got {len(gptq_claims)}"
         novelties = [c.novelty_score for c in gptq_claims]
-        # Second claim (lower improvement in same dim) should get 0.3
-        assert 0.3 in novelties, (
-            f"Expected at least one claim with novelty_score=0.3 for duplicate dim, got {novelties}"
+        # Second claim (lower improvement in same dim) gets a continuous score below 0.5
+        non_first = [s for s in novelties if s < 1.0]
+        assert non_first, f"Expected at least one non-first novelty score, got {novelties}"
+        assert all(s < 0.5 for s in non_first), (
+            f"Duplicate dim with lower improvement should score < 0.5, got {non_first}"
         )
 
     def test_higher_improvement_gets_high_novelty(self, tmp_path):
         from dojo.research.harvest_loop import run_harvest
         papers = [
             self._make_paper("2401.44444", "gptq", 10.0),   # first → 1.0
-            self._make_paper("2401.55555", "gptq", 80.0),   # bigger improvement → 0.8
+            self._make_paper("2401.55555", "gptq", 80.0),   # bigger improvement → > 0.5
         ]
         with patch("dojo.research.harvest_loop.search", return_value=papers):
             result = run_harvest(["quantization"], tmp_path, emit_evidence=False)
         gptq_claims = [c for c in result.claims if c.technique == "gptq"]
         assert len(gptq_claims) >= 2
         novelties = sorted([c.novelty_score for c in gptq_claims], reverse=True)
-        # First = 1.0 (first for dimension), second = 0.8 (bigger improvement)
+        # First = 1.0 (first for dimension), second > 0.5 (bigger improvement)
         assert novelties[0] == 1.0
-        assert novelties[1] == 0.8, (
-            f"Higher improvement in known dimension should get novelty_score=0.8, got {novelties[1]}"
+        assert novelties[1] > 0.5, (
+            f"Higher improvement in known dimension should get novelty_score > 0.5, got {novelties[1]}"
+        )
+
+    def test_equal_improvement_gets_midpoint_novelty(self, tmp_path):
+        from dojo.research.harvest_loop import run_harvest
+        papers = [
+            self._make_paper("2401.66666", "fp8", 40.0),   # first → 1.0
+            self._make_paper("2401.77777", "fp8", 40.0),   # same → ~0.5
+        ]
+        with patch("dojo.research.harvest_loop.search", return_value=papers):
+            result = run_harvest(["quantization"], tmp_path, emit_evidence=False)
+        fp8_claims = [c for c in result.claims if c.technique == "fp8"]
+        assert len(fp8_claims) >= 2
+        novelties = sorted([c.novelty_score for c in fp8_claims], reverse=True)
+        # Second claim with same improvement should land near 0.5
+        assert novelties[0] == 1.0
+        assert abs(novelties[1] - 0.5) < 0.05, (
+            f"Equal improvement should give novelty ~0.5, got {novelties[1]}"
         )
 
 

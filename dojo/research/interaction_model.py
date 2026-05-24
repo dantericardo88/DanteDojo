@@ -64,3 +64,70 @@ def classify_interaction(
 
     # Default: additive (catches edge cases)
     return InteractionEffect.ADDITIVE
+
+
+def describe_interaction(
+    baseline: float,
+    a_only: float,
+    b_only: float,
+    combined: float,
+    technique_a: str,
+    technique_b: str,
+    metric: str = "tokens_per_sec",
+    higher_is_better: bool = True,
+) -> str:
+    """Return a plain-English explanation of the measured interaction effect."""
+    effect = classify_interaction(baseline, a_only, b_only, combined)
+    gain_a = (a_only - baseline) / baseline if baseline > 0 else 0
+    gain_b = (b_only - baseline) / baseline if baseline > 0 else 0
+    gain_c = (combined - baseline) / baseline if baseline > 0 else 0
+    expected = gain_a + gain_b
+    synergy = gain_c - expected
+
+    a_pct = f"{gain_a:+.1%}"
+    b_pct = f"{gain_b:+.1%}"
+    c_pct = f"{gain_c:+.1%}"
+
+    lines = [
+        f"  Baseline:          {baseline:.1f}",
+        f"  {technique_a} only:  {a_only:.1f}  ({a_pct} vs baseline)",
+        f"  {technique_b} only:  {b_only:.1f}  ({b_pct} vs baseline)",
+        f"  Combined:          {combined:.1f}  ({c_pct} vs baseline)",
+        f"  Expected additive: {baseline * (1 + expected):.1f}  ({expected:+.1%})",
+        f"  Synergy delta:     {synergy:+.1%}",
+        "",
+    ]
+
+    if effect == InteractionEffect.SYNERGISTIC:
+        lines.append(
+            f"  SYNERGISTIC: the combined effect ({c_pct}) exceeds the simple sum of "
+            f"{technique_a} ({a_pct}) + {technique_b} ({b_pct}) = {expected:+.1%}. "
+            f"One technique partially cancels the overhead of the other."
+        )
+        if gain_b < 0:
+            lines.append(
+                f"  Note: {technique_b} alone degrades {metric} ({b_pct}) on this model size — "
+                f"dequantization overhead exceeds memory-bandwidth savings for <7B models. "
+                f"But {technique_a} partially cancels that overhead, so the combined loss "
+                f"({c_pct}) is less than the additive prediction ({expected:+.1%})."
+            )
+    elif effect == InteractionEffect.ADDITIVE:
+        lines.append(
+            f"  ADDITIVE: combined effect ({c_pct}) ≈ {technique_a} ({a_pct}) + "
+            f"{technique_b} ({b_pct}) = {expected:+.1%}. No amplification or interference."
+        )
+    elif effect == InteractionEffect.DESTRUCTIVE:
+        lines.append(
+            f"  DESTRUCTIVE: combined ({c_pct}) is worse than either technique alone "
+            f"({technique_a}: {a_pct}, {technique_b}: {b_pct}). "
+            f"The techniques interfere with each other."
+        )
+    elif effect == InteractionEffect.ORTHOGONAL:
+        lines.append(
+            f"  ORTHOGONAL: {technique_b} adds no benefit when {technique_a} is already applied. "
+            f"Combined ({c_pct}) ≈ {technique_a} alone ({a_pct})."
+        )
+    else:
+        lines.append(f"  UNKNOWN: insufficient data to classify interaction.")
+
+    return "\n".join(lines)
