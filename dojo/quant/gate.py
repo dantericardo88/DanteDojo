@@ -51,9 +51,18 @@ def check_quality_gate(
     Raises:
         QuantQualityRejected: when degradation exceeds *threshold*.
     """
+    import os
+    real_gpu = os.environ.get("DOJO_REAL_GPU", "0") == "1"
+
+    if real_gpu and (ppl_before is None or ppl_after is None):
+        raise ValueError(
+            "check_quality_gate: ppl_before and ppl_after are required when "
+            "DOJO_REAL_GPU=1. Measure real perplexity before passing to this gate."
+        )
+
     logger = EvidenceLogger.get_instance()
 
-    # Resolve metric values
+    # Resolve metric values (stub fallback only in CI / DOJO_REAL_GPU=0)
     stub_before, stub_after = _STUB_METRICS.get(quant_type.lower(), (25.0, 26.0))
     actual_before = ppl_before if ppl_before is not None else stub_before
     actual_after  = ppl_after  if ppl_after  is not None else stub_after

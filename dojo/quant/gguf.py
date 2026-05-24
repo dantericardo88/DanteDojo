@@ -225,10 +225,12 @@ def _find_convert_script() -> Optional[Path]:
 
     # 2. Local llama.cpp clone (common locations, including Windows)
     env_path = os.environ.get("LLAMA_CPP_PATH", "")
+    vendor_scripts = Path(__file__).resolve().parents[2] / "vendor" / "llama_quantize"
     candidates = [
         Path.home() / "llama.cpp" / "convert_hf_to_gguf.py",
         Path("/usr/local/lib/llama.cpp/convert_hf_to_gguf.py"),
         Path("llama.cpp/convert_hf_to_gguf.py"),
+        vendor_scripts / "convert_hf_to_gguf.py",
     ]
     if env_path:
         candidates.append(Path(env_path) / "convert_hf_to_gguf.py")
@@ -269,6 +271,32 @@ def _download_convert_script() -> Optional[Path]:
     return None
 
 
+def _find_llama_quantize() -> Optional[str]:
+    """Find llama-quantize binary: PATH → LLAMA_CPP_PATH → vendor/llama_quantize/."""
+    # 1. System PATH (works if installed via package manager or added manually)
+    found = shutil.which("llama-quantize")
+    if found:
+        return found
+
+    # 2. LLAMA_CPP_PATH env variable
+    env_path = os.environ.get("LLAMA_CPP_PATH", "")
+    if env_path:
+        candidate = Path(env_path) / "llama-quantize.exe"
+        if candidate.exists():
+            return str(candidate)
+
+    # 3. Bundled vendor directory (vendor/llama_quantize/llama-quantize.exe)
+    vendor = Path(__file__).resolve().parents[2] / "vendor" / "llama_quantize"
+    for name in ("llama-quantize.exe", "llama-quantize"):
+        candidate = vendor / name
+        if candidate.exists():
+            # Add vendor dir to PATH so the DLLs alongside it are found
+            os.environ["PATH"] = str(vendor) + os.pathsep + os.environ.get("PATH", "")
+            return str(candidate)
+
+    return None
+
+
 def _run_real_conversion(
     model_path: Path,
     output_dir: Path,
@@ -286,6 +314,8 @@ def _run_real_conversion(
     f16_path = output_dir / f"{model_path.name}-f16.gguf"
 
     # Step 1: Convert HF model to F16 GGUF
+    # Run with the script's parent dir as cwd so 'conversion/' package is importable
+    _convert_cwd = str(convert_script.parent)
     try:
         result = subprocess.run(
             [
@@ -300,6 +330,7 @@ def _run_real_conversion(
             capture_output=True,
             text=True,
             check=False,
+            cwd=_convert_cwd,
         )
     except OSError as exc:
         raise QuantizationError(
@@ -315,8 +346,8 @@ def _run_real_conversion(
 
     final_path = output_path
 
-    # Step 2: Quantize F16 → quant_type if llama-quantize is in PATH
-    llama_quantize = shutil.which("llama-quantize")
+    # Step 2: Quantize F16 → quant_type if llama-quantize is available
+    llama_quantize = _find_llama_quantize()
     if llama_quantize and f16_path.exists():
         try:
             qresult = subprocess.run(

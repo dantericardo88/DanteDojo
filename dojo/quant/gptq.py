@@ -449,13 +449,18 @@ def _measure_ppl(model_path: Path, quant_path: Path) -> tuple[float, float]:
       wikitext-2 test set; falls back to simple cross-entropy PPL if eval
       raises.
     """
-    use_real_tiny = _is_stub_mode() or model_path is None
+    if not _is_stub_mode() and model_path is None:
+        raise ValueError(
+            "measure_ppl_before_after: model_path is required when DOJO_REAL_GPU=1. "
+            "Pass the path to the quantized model checkpoint."
+        )
+
+    use_real_tiny = _is_stub_mode()
 
     if use_real_tiny:
         try:
             return _compute_real_ppl_on_tiny_model()
         except Exception:
-            # Final fallback: synthetic bigram PPL
             try:
                 return _compute_mock_ppl()
             except Exception:

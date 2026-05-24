@@ -292,10 +292,11 @@ class LocalGGUFRunner:
         self._ollama_model = ollama_model
         self._evidence = EvidenceLogger.get_instance()
 
-        # Streaming sub-systems (mock_mode degrades gracefully without torch/accelerate)
-        self._weight_streamer = WeightStreamer(mock_mode=True)
-        self._prefetch_gov = PrefetchGovernor(max_lookahead=16, mock_mode=True)
-        self._kv_streamer = KVCacheStreamer(max_cache_size=512, mock_mode=True)
+        # Streaming sub-systems: real mode when DOJO_REAL_GPU=1, degraded otherwise
+        _mock = not _real_gpu_mode()
+        self._weight_streamer = WeightStreamer(mock_mode=_mock)
+        self._prefetch_gov = PrefetchGovernor(max_lookahead=16, mock_mode=_mock)
+        self._kv_streamer = KVCacheStreamer(max_cache_size=512, mock_mode=_mock)
 
     @one_door("serve.local_gguf.load", organ="serve")
     def load(self) -> None:

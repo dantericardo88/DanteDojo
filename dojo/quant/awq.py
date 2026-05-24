@@ -266,7 +266,12 @@ def _measure_ppl_real(model_path: Path, quant_path: Path) -> tuple[float, float]
     """
     from dojo.quant.ppl import compute_real_ppl
 
-    if _is_stub_mode() or model_path is None:
+    if not _is_stub_mode() and model_path is None:
+        raise ValueError(
+            "_measure_ppl_real: model_path is required when DOJO_REAL_GPU=1."
+        )
+
+    if _is_stub_mode():
         # Stub mode: use tiny-gpt2 for real CPU PPL
         try:
             import copy

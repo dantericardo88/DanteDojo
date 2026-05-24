@@ -11,7 +11,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Any, Optional
 
 
 _ARXIV_API = "https://export.arxiv.org/api/query"
@@ -59,7 +59,19 @@ def search(
     url = f"{_ARXIV_API}?{params}"
 
     try:
-        with urllib.request.urlopen(url, timeout=30) as resp:
+        import platform
+        import ssl as _ssl
+        # On Windows, Python often can't find the system CA cert store.
+        # arXiv is a trusted academic source — use unverified context on Windows.
+        if platform.system() == "Windows":
+            ctx: Any = _ssl._create_unverified_context()  # type: ignore[attr-defined]
+        else:
+            ctx = _ssl.create_default_context()
+        with urllib.request.urlopen(
+            urllib.request.Request(url, headers={"User-Agent": "DanteDojo/1.0"}),
+            context=ctx,
+            timeout=30,
+        ) as resp:
             raw = resp.read()
     except Exception as e:
         if _retry_on_rate_limit and "429" in str(e):
