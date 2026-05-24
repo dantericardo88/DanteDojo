@@ -111,6 +111,14 @@ def _no_real_gpu(monkeypatch):
 # d11 — BF16 tests
 # ---------------------------------------------------------------------------
 
+import torch as _torch_skip_check
+_skip_no_bf16_gpu = pytest.mark.skipif(
+    not _torch_skip_check.cuda.is_available() or not _torch_skip_check.cuda.is_bf16_supported(),
+    reason="BF16 training requires a BF16-capable CUDA GPU (Ampere SM 8.6+)",
+)
+
+
+@_skip_no_bf16_gpu
 class TestBF16Training:
     """d11: BF16 mixed-precision training via torch.autocast."""
 

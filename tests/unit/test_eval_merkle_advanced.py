@@ -246,9 +246,9 @@ class TestLmEvalTaskCatalogCompleteness:
         """LM_EVAL_DEFAULT_SUITE is a tuple (not a list)."""
         assert isinstance(LM_EVAL_DEFAULT_SUITE, tuple)
 
-    def test_default_suite_has_four_tasks(self):
-        """Default suite contains exactly 4 tasks."""
-        assert len(LM_EVAL_DEFAULT_SUITE) == 4
+    def test_default_suite_has_tasks(self):
+        """Default suite contains at least 4 tasks (expanded from 4 → 8 in Wave 33)."""
+        assert len(LM_EVAL_DEFAULT_SUITE) >= 4
 
     def test_default_suite_tasks_are_strings(self):
         """Every item in LM_EVAL_DEFAULT_SUITE is a plain string."""
