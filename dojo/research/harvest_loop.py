@@ -55,6 +55,16 @@ def run_harvest(
     logger = EvidenceLogger.get_instance() if emit_evidence else None
     result = HarvestResult()
     seen_ids: set[str] = set()
+    seen_by_dim: dict[str, list[float]] = {}  # dim_id → improvement_pcts seen this run
+
+    def _compute_novelty(claim: CapabilityClaim) -> float:
+        """Return novelty score in [0, 1] based on dimension coverage + improvement magnitude."""
+        for dim in claim.dimension_ids:
+            if dim not in seen_by_dim:
+                return 1.0  # first claim for this dimension = maximally novel
+            if claim.improvement_pct > max(seen_by_dim[dim], default=0.0):
+                return 0.8  # best improvement seen so far for this dimension
+        return 0.3  # dimension already covered with equal or better improvement
 
     for query in queries:
         try:
@@ -89,6 +99,12 @@ def run_harvest(
                 continue
 
             claims = map_claims(claims)
+
+            for claim in claims:
+                claim.novelty_score = _compute_novelty(claim)
+                for dim in claim.dimension_ids:
+                    seen_by_dim.setdefault(dim, []).append(claim.improvement_pct)
+
             result.claims.extend(claims)
             result.claims_extracted += len(claims)
 

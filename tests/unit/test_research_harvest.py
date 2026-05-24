@@ -52,10 +52,12 @@ class TestClaimExtractor:
         assert claims, "Expected at least one claim from GPTQ abstract"
         assert any(abs(c.improvement_pct - 25.0) < 1.0 for c in claims)
 
-    def test_no_techniques_returns_empty(self):
+    def test_no_techniques_returns_empty_when_ollama_unavailable(self):
         from dojo.research.claim_extractor import extract_claims
         abstract = "We study the social impact of AI on employment markets."
-        claims = extract_claims("2401.00000", "AI Ethics", abstract)
+        # Patch the Ollama fallback so this test is deterministic even when Ollama is running.
+        with patch("dojo.research.claim_extractor._extract_via_ollama", return_value=[]):
+            claims = extract_claims("2401.00000", "AI Ethics", abstract)
         assert claims == []
 
 
@@ -227,3 +229,151 @@ class TestHarvestLoop:
             )
 
         assert result.papers_scanned == 1   # deduplicated
+
+
+class TestNoveltyScoring:
+    """Verify novelty scoring assigns accurate scores during harvest."""
+
+    def _make_paper(self, arxiv_id: str, technique: str, improvement_pct: float):
+        from dojo.research.arxiv_scanner import ArxivPaper
+        technique_word = technique.upper().replace("_", " ")
+        abstract = (
+            f"We apply {technique_word} and achieve {improvement_pct:.0f}% improvement on H100."
+        )
+        return ArxivPaper(
+            arxiv_id=arxiv_id,
+            title=f"{technique_word} Paper",
+            abstract=abstract,
+            authors=["Test Author"],
+            published="2024-01-01",
+            pdf_url="",
+            categories=["cs.LG"],
+        )
+
+    def test_first_claim_for_dimension_is_maximally_novel(self, tmp_path):
+        from dojo.research.harvest_loop import run_harvest
+        paper = self._make_paper("2401.11111", "gptq", 50.0)
+        with patch("dojo.research.harvest_loop.search", return_value=[paper]):
+            result = run_harvest(["quantization"], tmp_path, emit_evidence=False)
+        gptq_claims = [c for c in result.claims if c.technique == "gptq"]
+        assert gptq_claims, "Expected at least one GPTQ claim"
+        assert gptq_claims[0].novelty_score == 1.0, (
+            f"First claim for a dimension should be maximally novel (1.0), "
+            f"got {gptq_claims[0].novelty_score}"
+        )
+
+    def test_duplicate_dimension_gets_lower_novelty(self, tmp_path):
+        from dojo.research.harvest_loop import run_harvest
+        from dojo.research.arxiv_scanner import ArxivPaper
+        papers = [
+            self._make_paper("2401.22222", "gptq", 30.0),
+            self._make_paper("2401.33333", "gptq", 20.0),  # same dim, lower improvement
+        ]
+        with patch("dojo.research.harvest_loop.search", return_value=papers):
+            result = run_harvest(["quantization"], tmp_path, emit_evidence=False)
+        gptq_claims = [c for c in result.claims if c.technique == "gptq"]
+        assert len(gptq_claims) >= 2, f"Expected 2 GPTQ claims, got {len(gptq_claims)}"
+        novelties = [c.novelty_score for c in gptq_claims]
+        # Second claim (lower improvement in same dim) should get 0.3
+        assert 0.3 in novelties, (
+            f"Expected at least one claim with novelty_score=0.3 for duplicate dim, got {novelties}"
+        )
+
+    def test_higher_improvement_gets_high_novelty(self, tmp_path):
+        from dojo.research.harvest_loop import run_harvest
+        papers = [
+            self._make_paper("2401.44444", "gptq", 10.0),   # first → 1.0
+            self._make_paper("2401.55555", "gptq", 80.0),   # bigger improvement → 0.8
+        ]
+        with patch("dojo.research.harvest_loop.search", return_value=papers):
+            result = run_harvest(["quantization"], tmp_path, emit_evidence=False)
+        gptq_claims = [c for c in result.claims if c.technique == "gptq"]
+        assert len(gptq_claims) >= 2
+        novelties = sorted([c.novelty_score for c in gptq_claims], reverse=True)
+        # First = 1.0 (first for dimension), second = 0.8 (bigger improvement)
+        assert novelties[0] == 1.0
+        assert novelties[1] == 0.8, (
+            f"Higher improvement in known dimension should get novelty_score=0.8, got {novelties[1]}"
+        )
+
+
+def _ollama_available() -> bool:
+    """Check if Ollama is reachable at localhost:11434."""
+    import urllib.request
+    try:
+        urllib.request.urlopen("http://localhost:11434/api/tags", timeout=2)
+        return True
+    except Exception:
+        return False
+
+
+class TestOllamaFallback:
+    """Verify the Ollama LLM fallback for claim extraction."""
+
+    def test_ollama_returns_empty_on_failure(self):
+        from dojo.research.claim_extractor import _extract_via_ollama
+        # Force a connection failure by pointing at an invalid port
+        with patch("urllib.request.urlopen", side_effect=OSError("connection refused")):
+            result = _extract_via_ollama("2401.99999", "Test Paper", "Some abstract text.")
+        assert result == [], "Ollama unavailable should return empty list, not raise"
+
+    def test_ollama_parses_valid_json_response(self):
+        from dojo.research.claim_extractor import _extract_via_ollama
+        import json
+        mock_body = json.dumps({
+            "choices": [{
+                "message": {
+                    "content": '{"technique": "gptq", "metric": "tokens_per_sec", '
+                               '"improvement_pct": 35.0, "hardware": "H100"}'
+                }
+            }]
+        }).encode()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = mock_body
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            claims = _extract_via_ollama("2401.12345", "Fast GPTQ", "abstract")
+        assert len(claims) == 1
+        assert claims[0].technique == "gptq"
+        assert claims[0].improvement_pct == 35.0
+        assert claims[0].hardware == "H100"
+
+    def test_ollama_returns_empty_when_technique_is_null(self):
+        from dojo.research.claim_extractor import _extract_via_ollama
+        import json
+        mock_body = json.dumps({
+            "choices": [{"message": {"content": '{"technique": null}'}}]
+        }).encode()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = mock_body
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            claims = _extract_via_ollama("2401.00000", "AI Ethics", "No ML content here.")
+        assert claims == []
+
+    def test_ollama_returns_empty_on_malformed_json(self):
+        from dojo.research.claim_extractor import _extract_via_ollama
+        import json
+        mock_body = json.dumps({
+            "choices": [{"message": {"content": "I cannot extract any claims from this abstract."}}]
+        }).encode()
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = mock_body
+        mock_resp.__enter__ = lambda s: s
+        mock_resp.__exit__ = MagicMock(return_value=False)
+        with patch("urllib.request.urlopen", return_value=mock_resp):
+            claims = _extract_via_ollama("2401.00000", "Test", "abstract")
+        assert claims == []
+
+    @pytest.mark.skipif(not _ollama_available(), reason="requires Ollama at localhost:11434")
+    def test_live_ollama_extracts_or_returns_empty(self):
+        from dojo.research.claim_extractor import _extract_via_ollama
+        abstract = (
+            "We present a novel method for weight pruning that reduces model size "
+            "by 60% while maintaining 98% of baseline accuracy on ImageNet."
+        )
+        claims = _extract_via_ollama("live_test", "Weight Pruning Paper", abstract)
+        # Either extracts a claim or returns [] — both are valid; should not raise
+        assert isinstance(claims, list)

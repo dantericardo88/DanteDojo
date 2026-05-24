@@ -101,7 +101,7 @@ def extract_claims(paper_id: str, title: str, abstract: str) -> list[CapabilityC
 
     techniques = [name for pat, name in _TECHNIQUE_PATTERNS if pat.search(text)]
     if not techniques:
-        return []
+        return _extract_via_ollama(paper_id, title, abstract)
 
     hardware = _detect_hardware(text)
     metric = _detect_metric(text)
@@ -121,6 +121,69 @@ def extract_claims(paper_id: str, title: str, abstract: str) -> list[CapabilityC
         ))
 
     return claims
+
+
+def _extract_via_ollama(paper_id: str, title: str, abstract: str) -> list[CapabilityClaim]:
+    """LLM-based fallback when rule-based extraction finds no known techniques.
+
+    Calls Ollama at localhost:11434. Returns [] if Ollama is unavailable or returns
+    no recognisable claim. Never raises — failures are silently swallowed.
+    """
+    import json
+    import urllib.request
+
+    valid_techniques = (
+        "flash_attention, gptq, awq, gguf, fp8, fp4, lora, grpo, dpo, vllm, "
+        "kv_cache, speculative_decoding, moe, fsdp, rope, int4_bnb, "
+        "grouped_query_attention"
+    )
+    valid_metrics = "tokens_per_sec, ppl, latency_ms, memory_gb, quality_score"
+
+    prompt = (
+        f"Extract an ML capability claim from this paper abstract.\n"
+        f"Title: {title}\nAbstract: {abstract[:600]}\n\n"
+        f"Reply with JSON only (no prose):\n"
+        f'{{ "technique": "...", "metric": "...", "improvement_pct": 0.0, "hardware": "..." }}\n\n'
+        f"technique must be one of: {valid_techniques}\n"
+        f"metric must be one of: {valid_metrics}\n"
+        f'If no clear ML capability claim exists, return {{ "technique": null }}'
+    )
+
+    try:
+        payload = json.dumps({
+            "model": "qwen2.5:0.5b",
+            "messages": [{"role": "user", "content": prompt}],
+            "stream": False,
+        }).encode()
+        req = urllib.request.Request(
+            "http://localhost:11434/v1/chat/completions",
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read())
+        text = data["choices"][0]["message"]["content"].strip()
+        start = text.find("{")
+        end = text.rfind("}") + 1
+        if start == -1 or end == 0:
+            return []
+        parsed = json.loads(text[start:end])
+        technique = parsed.get("technique")
+        if not technique:
+            return []
+        return [CapabilityClaim(
+            paper_id=paper_id,
+            title=title,
+            technique=str(technique),
+            metric=str(parsed.get("metric", "quality_score")),
+            value=float(parsed.get("improvement_pct", 10.0)),
+            baseline_value=100.0,
+            improvement_pct=float(parsed.get("improvement_pct", 10.0)),
+            hardware=str(parsed.get("hardware", "unknown")),
+        )]
+    except Exception:
+        return []
 
 
 def _detect_hardware(text: str) -> str:
