@@ -180,8 +180,10 @@ class CombinationComposer:
             synergy = gain_combined - (gain_a + gain_b)
 
             elapsed = time.monotonic() - t0
+            # Pass raw metric values so description shows human-readable numbers.
+            # describe_interaction normalizes internally for higher_is_better=False.
             description = describe_interaction(
-                bl, a_n, b_n, c_n,
+                baseline, a_val, b_val, combined,
                 pair.technique_a, pair.technique_b,
                 pair.metric, pair.higher_is_better,
             )

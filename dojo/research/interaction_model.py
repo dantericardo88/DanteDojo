@@ -76,11 +76,24 @@ def describe_interaction(
     metric: str = "tokens_per_sec",
     higher_is_better: bool = True,
 ) -> str:
-    """Return a plain-English explanation of the measured interaction effect."""
-    effect = classify_interaction(baseline, a_only, b_only, combined)
-    gain_a = (a_only - baseline) / baseline if baseline > 0 else 0
-    gain_b = (b_only - baseline) / baseline if baseline > 0 else 0
-    gain_c = (combined - baseline) / baseline if baseline > 0 else 0
+    """Return a plain-English explanation of the measured interaction effect.
+
+    Accepts raw metric values (in their natural units) regardless of direction.
+    For higher_is_better=False (e.g. PPL), values are inverted internally before
+    classification so the interaction math is correct; the text shows raw values.
+    """
+    if not higher_is_better:
+        bl_n = 1 / baseline if baseline > 0 else 0
+        a_n = 1 / a_only if a_only > 0 else 0
+        b_n = 1 / b_only if b_only > 0 else 0
+        c_n = 1 / combined if combined > 0 else 0
+    else:
+        bl_n, a_n, b_n, c_n = baseline, a_only, b_only, combined
+
+    effect = classify_interaction(bl_n, a_n, b_n, c_n)
+    gain_a = (a_n - bl_n) / bl_n if bl_n > 0 else 0
+    gain_b = (b_n - bl_n) / bl_n if bl_n > 0 else 0
+    gain_c = (c_n - bl_n) / bl_n if bl_n > 0 else 0
     expected = gain_a + gain_b
     synergy = gain_c - expected
 
