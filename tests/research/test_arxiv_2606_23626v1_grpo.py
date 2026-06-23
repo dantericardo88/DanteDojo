@@ -1,0 +1,42 @@
+"""AUTO-GENERATED test stub from arXiv:2606.23626v1
+
+Title: DiT-Reward: Generative Representations for Text-to-Image Reward Modeling
+Technique: grpo
+Metric: quality_score improved 10.0% vs baseline on unknown
+Dimension(s): d18
+
+Abstract excerpt:
+  Can representations learned for image generation also support the evaluation of generated images? We study text-to-image reward prediction as a downstream task of generative representation learning. To this end, we introduce DiT-Reward, which converts a pretrained text-to-image Diffusion Transformer
+
+HUMAN ACTION REQUIRED: implement test_claim_validation below.
+Replace the `pytest.skip` with real GPU validation code.
+"""
+
+from __future__ import annotations
+
+import os
+import pytest
+
+_REAL_GPU = os.environ.get("DOJO_REAL_GPU", "0") == "1"
+
+
+@pytest.mark.skipif(not _REAL_GPU, reason="requires DOJO_REAL_GPU=1")
+class TestArXiv_2606_23626v1_grpo:
+    """GPU-validated test for arXiv:2606.23626v1 — grpo."""
+
+    PAPER_ID = "2606.23626v1"
+    TECHNIQUE = "grpo"
+    METRIC = "quality_score"
+    CLAIMED_IMPROVEMENT_PCT = 10.0
+    HARDWARE = "unknown"
+    DIMENSION_IDS = ["d18"]
+
+    def test_claim_validation(self, tmp_path):
+        """Validate: grpo improves quality_score by 10.0% on unknown.
+
+        TODO: implement — auto-generated stub awaiting GPU validation.
+        """
+        pytest.skip(
+            f"{self.TECHNIQUE} claim validation not yet implemented — "
+            f"see arXiv:{self.PAPER_ID}"
+        )
