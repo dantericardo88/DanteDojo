@@ -7,8 +7,12 @@ __pycache__/
 # Distribution / packaging
 *.egg-info/
 dist/
+dist_test/
 build/
 *.egg
+
+# Downloaded model weights & generated artifacts (re-downloadable; too large for git)
+artifacts/
 
 # Virtual environments
 .venv/
