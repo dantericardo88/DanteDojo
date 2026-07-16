@@ -6,7 +6,7 @@ Metric: quality_score improved 10.0% vs baseline on unknown
 Dimension(s): d31
 
 Abstract excerpt:
-  The multiplicative repetition penalty shipped across the LLM inference ecosystem (HuggingFace, vLLM, llama.cpp, and a dozen further engines) branches on the sign of each raw logit (divide positives by theta, multiply negatives). But the softmax is unchanged by adding a constant to every logit, so a 
+  The multiplicative repetition penalty shipped across the LLM inference ecosystem (HuggingFace, vLLM, llama$.$cpp, and a dozen further engines) branches on the sign of each raw logit (divide positives by theta, multiply negatives). But the softmax is unchanged by adding a constant to every logit, so 
 
 HUMAN ACTION REQUIRED: implement test_claim_validation below.
 Replace the `pytest.skip` with real GPU validation code.
