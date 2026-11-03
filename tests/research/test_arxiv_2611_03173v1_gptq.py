@@ -1,0 +1,42 @@
+"""AUTO-GENERATED test stub from arXiv:2611.03173v1
+
+Title: PagedMoE: Cross-Precision Expert Caching for Token-Level Dynamic Precision in SSD-Resident MoE Inference
+Technique: gptq
+Metric: tokens_per_sec improved 10.0% vs baseline on unknown
+Dimension(s): d22
+
+Abstract excerpt:
+  Large Mixture-of-Experts (MoE) models are promising for local inference because sparse routing allows the routed-expert pool to reside on SSD while DRAM caches recently used experts. However, under practical DRAM cache capacities, substantial SSD I/O remains on the critical path despite I/O-computat
+
+HUMAN ACTION REQUIRED: implement test_claim_validation below.
+Replace the `pytest.skip` with real GPU validation code.
+"""
+
+from __future__ import annotations
+
+import os
+import pytest
+
+_REAL_GPU = os.environ.get("DOJO_REAL_GPU", "0") == "1"
+
+
+@pytest.mark.skipif(not _REAL_GPU, reason="requires DOJO_REAL_GPU=1")
+class TestArXiv_2611_03173v1_gptq:
+    """GPU-validated test for arXiv:2611.03173v1 — gptq."""
+
+    PAPER_ID = "2611.03173v1"
+    TECHNIQUE = "gptq"
+    METRIC = "tokens_per_sec"
+    CLAIMED_IMPROVEMENT_PCT = 10.0
+    HARDWARE = "unknown"
+    DIMENSION_IDS = ["d22"]
+
+    def test_claim_validation(self, tmp_path):
+        """Validate: gptq improves tokens_per_sec by 10.0% on unknown.
+
+        TODO: implement — auto-generated stub awaiting GPU validation.
+        """
+        pytest.skip(
+            f"{self.TECHNIQUE} claim validation not yet implemented — "
+            f"see arXiv:{self.PAPER_ID}"
+        )
